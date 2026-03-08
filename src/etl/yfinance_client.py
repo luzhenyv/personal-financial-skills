@@ -49,6 +49,8 @@ def get_stock_info(ticker: str) -> dict[str, Any]:
             "ps_trailing": info.get("priceToSalesTrailing12Months"),
             "pb_ratio": info.get("priceToBook"),
             "ev_to_ebitda": info.get("enterpriseToEbitda"),
+            "gross_margins": info.get("grossMargins"),
+            "operating_margins": info.get("operatingMargins"),
             "dividend_yield": info.get("dividendYield"),
             "beta": info.get("beta"),
             "description": info.get("longBusinessSummary", ""),

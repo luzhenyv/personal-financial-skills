@@ -106,7 +106,7 @@ def render_overview_tab(d: CompanyPageData) -> None:
                         margin=dict(t=50, b=20, l=20, r=20),
                         showlegend=False,
                     )
-                    st.plotly_chart(fig_seg, use_container_width=True)
+                    st.plotly_chart(fig_seg, width="stretch")
 
                     seg_rows = []
                     for s in segments:
@@ -123,7 +123,7 @@ def render_overview_tab(d: CompanyPageData) -> None:
                             "YoY Growth": fmt_growth(growth),
                             "Description": (s.get("description", ""))[:80],
                         })
-                    st.dataframe(pd.DataFrame(seg_rows), use_container_width=True, hide_index=True)
+                    st.dataframe(pd.DataFrame(seg_rows), width="stretch", hide_index=True)
 
         with col_geo:
             if geo_data:
@@ -156,7 +156,7 @@ def render_overview_tab(d: CompanyPageData) -> None:
                     margin=dict(t=50, b=20, l=20, r=20),
                     showlegend=False,
                 )
-                st.plotly_chart(fig_geo, use_container_width=True)
+                st.plotly_chart(fig_geo, width="stretch")
 
     # ── Management Team ───────────────────────────────────────────────────────
     if d.management and d.management.get("executives"):

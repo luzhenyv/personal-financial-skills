@@ -42,7 +42,7 @@ def render_financials_tab(d: CompanyPageData) -> None:
                 showlegend=False,
                 margin=dict(t=40, b=40),
             )
-            st.plotly_chart(fig_rev, use_container_width=True)
+            st.plotly_chart(fig_rev, width="stretch")
 
         with col2:
             fig_income = go.Figure()
@@ -65,7 +65,7 @@ def render_financials_tab(d: CompanyPageData) -> None:
                 height=380,
                 margin=dict(t=40, b=40),
             )
-            st.plotly_chart(fig_income, use_container_width=True)
+            st.plotly_chart(fig_income, width="stretch")
 
         # EPS chart
         eps_data = [
@@ -90,7 +90,7 @@ def render_financials_tab(d: CompanyPageData) -> None:
                 showlegend=False,
                 margin=dict(t=40, b=40),
             )
-            st.plotly_chart(fig_eps, use_container_width=True)
+            st.plotly_chart(fig_eps, width="stretch")
 
         with st.expander("📋 Income Statement Details"):
             display_df = df_inc.copy()
@@ -107,7 +107,7 @@ def render_financials_tab(d: CompanyPageData) -> None:
                 display_df["eps_diluted"] = display_df["eps_diluted"].apply(
                     lambda x: f"${x:.2f}" if x else "N/A"
                 )
-            st.dataframe(display_df, use_container_width=True, hide_index=True)
+            st.dataframe(display_df, width="stretch", hide_index=True)
 
     # ── Margin Analysis ───────────────────────────────────────────────────────
     if d.metrics:
@@ -138,7 +138,7 @@ def render_financials_tab(d: CompanyPageData) -> None:
             legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
             margin=dict(t=30, b=40),
         )
-        st.plotly_chart(fig_margins, use_container_width=True)
+        st.plotly_chart(fig_margins, width="stretch")
 
         col1, col2, col3 = st.columns(3)
         m = df_metrics.iloc[-1]
@@ -169,7 +169,7 @@ def render_financials_tab(d: CompanyPageData) -> None:
                     display_metrics[c] = display_metrics[c].apply(
                         lambda x: f"{x:.1f}x" if x else "N/A"
                     )
-            st.dataframe(display_metrics, use_container_width=True, hide_index=True)
+            st.dataframe(display_metrics, width="stretch", hide_index=True)
 
     # ── Balance Sheet ─────────────────────────────────────────────────────────
     if d.balances:
@@ -197,7 +197,7 @@ def render_financials_tab(d: CompanyPageData) -> None:
                 height=380,
                 margin=dict(t=40, b=40),
             )
-            st.plotly_chart(fig_bs, use_container_width=True)
+            st.plotly_chart(fig_bs, width="stretch")
 
         with col2:
             fig_cd = go.Figure()
@@ -219,7 +219,7 @@ def render_financials_tab(d: CompanyPageData) -> None:
                 height=380,
                 margin=dict(t=40, b=40),
             )
-            st.plotly_chart(fig_cd, use_container_width=True)
+            st.plotly_chart(fig_cd, width="stretch")
 
     # ── Cash Flow ─────────────────────────────────────────────────────────────
     if d.cash_flows:
@@ -253,4 +253,4 @@ def render_financials_tab(d: CompanyPageData) -> None:
             height=400,
             margin=dict(t=40, b=40),
         )
-        st.plotly_chart(fig_cf, use_container_width=True)
+        st.plotly_chart(fig_cf, width="stretch")

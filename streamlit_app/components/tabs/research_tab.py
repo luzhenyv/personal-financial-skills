@@ -92,7 +92,7 @@ def render_research_tab(d: CompanyPageData) -> None:
                 "P/S": f"{p['ps_ratio']:.1f}x" if p.get("ps_ratio") else "N/A",
             })
 
-        st.dataframe(pd.DataFrame(comps_rows), use_container_width=True, hide_index=True)
+        st.dataframe(pd.DataFrame(comps_rows), width="stretch", hide_index=True)
 
         summary = d.comps.get("peer_summary")
         if summary:
@@ -160,7 +160,7 @@ def render_research_tab(d: CompanyPageData) -> None:
                 showlegend=False,
                 margin=dict(t=40, b=40),
             )
-            st.plotly_chart(fig_comp, use_container_width=True)
+            st.plotly_chart(fig_comp, width="stretch")
 
     # ── Investment Thesis ─────────────────────────────────────────────────────
     if d.thesis:

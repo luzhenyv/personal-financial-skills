@@ -27,7 +27,7 @@ def render_report_tab(d: CompanyPageData, rev_growth: float, wacc: float) -> Non
     with col1:
         st.caption(f"Full research report for {ticker}, sourced from SEC filings and analysis.")
     with col2:
-        generate_btn = st.button("🔄 Generate Report", type="primary", use_container_width=True)
+        generate_btn = st.button("🔄 Generate Report", type="primary", width="stretch")
 
     if generate_btn:
         with st.spinner(f"Generating investment report for {ticker}..."):
@@ -66,7 +66,7 @@ def render_report_tab(d: CompanyPageData, rev_growth: float, wacc: float) -> Non
                 data=display_report,
                 file_name=f"{ticker}_company_profile.md",
                 mime="text/markdown",
-                use_container_width=True,
+                width="stretch",
             )
         with col2:
             try:
@@ -76,7 +76,7 @@ def render_report_tab(d: CompanyPageData, rev_growth: float, wacc: float) -> Non
                     data=tearsheet_md,
                     file_name=f"{ticker}_tearsheet.md",
                     mime="text/markdown",
-                    use_container_width=True,
+                    width="stretch",
                 )
             except Exception:
                 pass

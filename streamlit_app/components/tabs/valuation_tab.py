@@ -106,7 +106,7 @@ def _render_dcf_section(dcf, current_price: float | None) -> None:
         showlegend=False,
         margin=dict(t=40, b=40),
     )
-    st.plotly_chart(fig_fcf, use_container_width=True)
+    st.plotly_chart(fig_fcf, width="stretch")
 
     with st.expander("DCF Assumptions", expanded=False):
         assumptions_df = pd.DataFrame({
@@ -126,7 +126,7 @@ def _render_dcf_section(dcf, current_price: float | None) -> None:
                 f"{dcf.shares_outstanding / 1e6:,.0f}M",
             ],
         })
-        st.dataframe(assumptions_df, use_container_width=True, hide_index=True)
+        st.dataframe(assumptions_df, width="stretch", hide_index=True)
 
     if dcf.sensitivity:
         st.markdown('<div class="section-header">🔥 Sensitivity Analysis</div>', unsafe_allow_html=True)
@@ -157,7 +157,7 @@ def _render_dcf_section(dcf, current_price: float | None) -> None:
             height=350,
             margin=dict(t=20, b=40),
         )
-        st.plotly_chart(fig_heatmap, use_container_width=True)
+        st.plotly_chart(fig_heatmap, width="stretch")
 
 
 def _render_scenarios_section(scenarios_result, current_price: float | None) -> None:
@@ -203,7 +203,7 @@ def _render_scenarios_section(scenarios_result, current_price: float | None) -> 
         showlegend=False,
         margin=dict(t=40, b=40),
     )
-    st.plotly_chart(fig_scenario, use_container_width=True)
+    st.plotly_chart(fig_scenario, width="stretch")
 
     with st.expander("Scenario Details"):
         scenario_rows = []
@@ -222,7 +222,7 @@ def _render_scenarios_section(scenarios_result, current_price: float | None) -> 
                         else "N/A"
                     ),
                 })
-        st.dataframe(pd.DataFrame(scenario_rows), use_container_width=True, hide_index=True)
+        st.dataframe(pd.DataFrame(scenario_rows), width="stretch", hide_index=True)
 
 
 def _render_comps_section(comps_result) -> None:
@@ -250,7 +250,7 @@ def _render_comps_section(comps_result) -> None:
             "Op Margin": f"{p['operating_margin'] * 100:.1f}%" if p.get("operating_margin") else "N/A",
         })
 
-    st.dataframe(pd.DataFrame(peer_rows), use_container_width=True, hide_index=True)
+    st.dataframe(pd.DataFrame(peer_rows), width="stretch", hide_index=True)
 
     if comps_result.implied_pe or comps_result.implied_ps:
         col1, col2, col3 = st.columns(3)

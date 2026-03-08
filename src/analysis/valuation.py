@@ -620,14 +620,26 @@ def _build_comps(
     # Normalise peer dicts to what the UI expects
     peers: list[dict[str, Any]] = []
     for p in peers_raw:
+        # gross_margin_pct / operating_margin_pct are stored as % (e.g. 52.5);
+        # normalise to decimal (0.525) for the UI which multiplies by 100.
+        gm_raw = p.get("gross_margin") or p.get("gross_margin_pct")
+        gm = _safe_float(gm_raw, 0) or None
+        if gm and gm > 1:
+            gm = gm / 100
+
+        om_raw = p.get("operating_margin") or p.get("operating_margin_pct")
+        om = _safe_float(om_raw, 0) or None
+        if om and om > 1:
+            om = om / 100
+
         peers.append({
             "ticker": p.get("ticker", ""),
             "name": p.get("name") or p.get("short_name", ""),
             "pe_ratio": _safe_float(p.get("pe_ratio") or p.get("pe_forward"), 0) or None,
             "ps_ratio": _safe_float(p.get("ps_ratio") or p.get("price_to_sales"), 0) or None,
-            "ev_to_ebitda": _safe_float(p.get("ev_to_ebitda"), 0) or None,
-            "gross_margin": _safe_float(p.get("gross_margin"), 0) or None,
-            "operating_margin": _safe_float(p.get("operating_margin"), 0) or None,
+            "ev_to_ebitda": _safe_float(p.get("ev_to_ebitda") or p.get("ev_ebitda"), 0) or None,
+            "gross_margin": gm,
+            "operating_margin": om,
         })
 
     # Target metrics from live yfinance
@@ -638,8 +650,8 @@ def _build_comps(
         info = get_stock_info(ticker)
         target_metrics.update({
             "name": info.get("name", ticker),
-            "pe_ratio": info.get("pe_forward") or info.get("pe_ratio"),
-            "ps_ratio": info.get("ps_ratio") or info.get("price_to_sales"),
+            "pe_ratio": info.get("pe_forward") or info.get("pe_trailing"),
+            "ps_ratio": info.get("ps_trailing") or info.get("ps_ratio"),
             "ev_to_ebitda": info.get("ev_to_ebitda"),
             "gross_margin": info.get("gross_margins"),
             "operating_margin": info.get("operating_margins"),

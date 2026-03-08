@@ -82,7 +82,7 @@ with st.sidebar:
 
     st.markdown("---")
     st.subheader("Valuation Parameters")
-    rev_growth = st.slider("Revenue Growth (%)", 0, 40, 12) / 100.0
+    rev_growth = st.slider("Revenue Growth (%)", 0, 80, 12) / 100.0
     wacc_param = st.slider("WACC (%)", 5, 20, 10) / 100.0
     st.caption("Used for DCF & investment report")
 
