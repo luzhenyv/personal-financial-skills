@@ -1,0 +1,68 @@
+version: "3.8"
+
+services:
+  postgres:
+    image: postgres:16
+    container_name: pfs-postgres
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-personal_finance}
+      POSTGRES_USER: ${POSTGRES_USER:-pfs}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-pfs_dev_2024}
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./src/db/schema.sql:/docker-entrypoint-initdb.d/01-schema.sql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U pfs -d personal_finance"]
+      interval: 5s
+      retries: 5
+
+  pgadmin:
+    image: dpage/pgadmin4
+    container_name: pfs-pgadmin
+    environment:
+      PGADMIN_DEFAULT_EMAIL: admin@pfs.local
+      PGADMIN_DEFAULT_PASSWORD: admin
+    ports:
+      - "5050:80"
+    depends_on:
+      - postgres
+
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: pfs-api
+    command: uv run uvicorn src.api.app:app --host 0.0.0.0 --port 8000 --reload
+    ports:
+      - "8000:8000"
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:-pfs}:${POSTGRES_PASSWORD:-pfs_dev_2024}@postgres:5432/${POSTGRES_DB:-personal_finance}
+      SEC_USER_AGENT: ${SEC_USER_AGENT}
+      ALPHA_VANTAGE_KEY: ${ALPHA_VANTAGE_KEY}
+      DATA_DIR: /app/data
+    volumes:
+      - .:/app
+      - ./data:/app/data
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  streamlit:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: pfs-streamlit
+    command: uv run streamlit run streamlit_app/app.py --server.port 8501 --server.address 0.0.0.0
+    ports:
+      - "8501:8501"
+    environment:
+      API_URL: http://api:8000
+    volumes:
+      - .:/app
+    depends_on:
+      - api
+
+volumes:
+  pgdata:
