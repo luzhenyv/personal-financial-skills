@@ -30,6 +30,7 @@ Powered by SEC EDGAR filings, Python-based valuation models, and interactive Plo
 | Page | Description |
 |------|-------------|
 | **🏢 Company Profile** | Financials, margins, valuation, and investment report — all in one page |
+| **🎯 Thesis Tracker** | Investment thesis management — create, update, and health-check theses |
 
 ### 3-Tab Company Profile
 
@@ -56,6 +57,7 @@ SEC EDGAR XBRL → PostgreSQL → Python Analysis → Streamlit + Plotly
                      ├── company_profile.py (tearsheet)
                      ├── valuation.py (DCF, comps, scenarios)
                      ├── investment_report.py (full report)
+                     ├── thesis_tracker.py (thesis management)
                      └── yfinance_client.py (live prices)
 ```
 
