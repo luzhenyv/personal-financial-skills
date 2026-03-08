@@ -21,6 +21,31 @@ Report                 → data/reports/{ticker}/company_profile.md + analysis_r
 Interactive view       → Streamlit app at http://localhost:8501
 ```
 
+**Data Source Priority & Conflict Resolution**:
+
+| Priority | Source | Used For |
+|----------|--------|----------|
+| 1 (Primary) | SEC EDGAR (10-K/Q XBRL + HTML) | All financial statements, revenue, margins, EPS, balance sheet |
+| 2 (Secondary) | yfinance | Market data (price, market cap, P/E fwd), peer discovery, LTM estimates |
+| 3 (Backup) | Alpha Vantage (`ALPHA_VANTAGE_KEY`) | Use when SEC XBRL and yfinance figures conflict or data is missing |
+
+When a conflict is detected between primary and secondary sources (e.g., revenue figures differ by >2%), fall back to **Alpha Vantage** to obtain a third reference point and use the majority-consensus value. Log the discrepancy as a footnote in the report.
+
+```python
+# Example: resolve conflict using Alpha Vantage as tiebreaker
+from src.etl.alpha_vantage_client import get_income_statement  # if implemented
+
+sec_revenue = 130.5e9      # from XBRL
+yfinance_revenue = 128.0e9 # from yfinance
+av_revenue = get_income_statement(ticker)["annualReports"][0]["totalRevenue"]
+
+# Use the value that two sources agree on (within 2% tolerance)
+```
+
+> **Note**: Alpha Vantage free tier is limited to **25 requests/day**. Reserve it for conflict resolution only, not bulk ingestion.
+
+---
+
 **Scripts** (in `skills/company-profile/scripts/`):
 
 | Script | Purpose | Task |
