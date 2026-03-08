@@ -105,8 +105,14 @@ def load_json(path: Path) -> dict | list:
         return {}
 
 
-def query_financials(ticker: str, session) -> list[dict]:
-    """Query all annual financial data for a ticker from PostgreSQL."""
+def query_financials(ticker: str, session, *, fiscal_year_end: str | None = None) -> list[dict]:
+    """Query all annual financial data for a ticker from PostgreSQL.
+
+    Per-share fields (``eps_diluted``) are automatically split-adjusted to the
+    current share basis using ``data/processed/{TICKER}/stock_splits.json``.
+    """
+    from src.splits import get_split_adjustor
+
     rows = session.execute(text("""
         SELECT
             i.fiscal_year,
@@ -157,7 +163,16 @@ def query_financials(ticker: str, session) -> list[dict]:
         WHERE i.ticker = :ticker AND i.fiscal_quarter IS NULL
         ORDER BY i.fiscal_year
     """), {"ticker": ticker}).mappings().all()
-    return [dict(r) for r in rows]
+    results = [dict(r) for r in rows]
+
+    # Split-adjust per-share metrics to current share basis
+    adjust = get_split_adjustor(ticker, fiscal_year_end=fiscal_year_end)
+    for d in results:
+        fy = d.get("fiscal_year")
+        if fy is not None:
+            d["eps_diluted"] = adjust(fy, d.get("eps_diluted"))
+
+    return results
 
 
 # ── Report sections ────────────────────────────────────────────────────────────
@@ -635,8 +650,21 @@ def main():
 
     # ── Query PostgreSQL financial data ────────────────────────────────────────
     session = get_session()
+
+    # Resolve fiscal-year-end code for split adjustment (e.g. "0131" for Jan 31)
+    fye_code: str | None = None
     try:
-        fin_data = query_financials(ticker, session)
+        row = session.execute(
+            text("SELECT fiscal_year_end FROM companies WHERE ticker = :t"),
+            {"t": ticker},
+        ).fetchone()
+        if row:
+            fye_code = row[0]
+    except Exception:
+        pass
+
+    try:
+        fin_data = query_financials(ticker, session, fiscal_year_end=fye_code)
     except Exception as e:
         print(f"Warning: DB query failed: {e}")
         fin_data = []

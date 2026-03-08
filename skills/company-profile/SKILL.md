@@ -44,6 +44,52 @@ av_revenue = get_income_statement(ticker)["annualReports"][0]["totalRevenue"]
 
 > **Note**: Alpha Vantage free tier is limited to **25 requests/day**. Reserve it for conflict resolution only, not bulk ingestion.
 
+**Stock Split Adjustment (Per-Share Metrics)**:
+
+SEC XBRL filings report EPS and other per-share figures **as-filed at the time of the original filing** — they are NOT retroactively restated for subsequent stock splits. This causes historical per-share metrics to appear inflated relative to post-split values (e.g., NVDA reported FY2024 EPS of $11.93 pre-split, which should be $1.19 after the 10:1 split in June 2024).
+
+**Mandatory adjustment rule**: All per-share metrics displayed in the report and Streamlit app **must be split-adjusted to the current share basis** so that multi-year trends are comparable. This applies to:
+- EPS (basic and diluted)
+- Dividends per share
+- Book value per share
+- Any custom per-share ratios
+
+**How to detect and apply splits**:
+1. **Query yfinance for split history**: `yf.Ticker(ticker).splits` returns a series of split dates and ratios
+2. **Compute cumulative split factor**: For each historical fiscal year, multiply all split ratios that occurred *after* that fiscal year's end date up to the present
+3. **Adjust**: `adjusted_eps = reported_eps / cumulative_split_factor`
+4. **Store the split history** in `data/processed/{TICKER}/stock_splits.json` for auditability
+
+```python
+# Example: adjust historical EPS for NVDA (10:1 split on 2024-06-10)
+import yfinance as yf
+
+splits = yf.Ticker("NVDA").splits  # e.g., {2024-06-10: 10.0, 2021-07-20: 4.0}
+
+# For FY2024 (ended Jan 2024, before the June 2024 split):
+# cumulative_factor = 10.0 (one split after FY-end)
+# adjusted_eps = 11.93 / 10.0 = 1.193 ≈ $1.19
+
+# For FY2021 (ended Jan 2021, before both splits):
+# cumulative_factor = 4.0 * 10.0 = 40.0
+# adjusted_eps = reported_eps / 40.0
+```
+
+> **Important**: Shares outstanding (`shares_diluted`) from XBRL are also as-reported. When computing per-share metrics from raw financials (e.g., `net_income / shares_diluted`), either adjust both numerator consistency or use the already-adjusted EPS. The safest approach is to adjust shares outstanding upward by the same cumulative split factor and recompute derived metrics.
+
+```json
+// data/processed/{TICKER}/stock_splits.json
+{
+  "ticker": "NVDA",
+  "splits": [
+    { "date": "2024-06-10", "ratio": 10, "description": "10-for-1 stock split" },
+    { "date": "2021-07-20", "ratio": 4, "description": "4-for-1 stock split" }
+  ],
+  "source": "yfinance",
+  "current_basis_date": "2026-03-09"
+}
+```
+
 ---
 
 **Scripts** (in `skills/company-profile/scripts/`):
@@ -106,6 +152,28 @@ WHERE i.ticker = '{ticker}' AND i.fiscal_quarter IS NULL
 ORDER BY fiscal_year;
 ```
 Require **at least 3 years** of annual data before proceeding.
+
+### Detect and record stock splits:
+After ingestion, query yfinance for split history and save it for downstream use:
+```python
+import yfinance as yf, json
+from pathlib import Path
+
+splits = yf.Ticker(ticker).splits
+if not splits.empty:
+    split_data = {
+        "ticker": ticker,
+        "splits": [
+            {"date": str(d.date()), "ratio": float(r)}
+            for d, r in splits.items()
+        ],
+        "source": "yfinance"
+    }
+    out = Path(f"data/processed/{ticker}/stock_splits.json")
+    out.parent.mkdir(parents=True, exist_ok=True)
+    out.write_text(json.dumps(split_data, indent=2))
+```
+This file is consumed by `generate_report.py` to split-adjust all per-share metrics.
 
 **Task 1 Outputs**:
 - `data/raw/{TICKER}/10-K_{date}.htm` — raw annual filing
@@ -316,6 +384,7 @@ The script reads all JSON files from `data/processed/{TICKER}/` and queries Post
 - Percentages to 1 decimal place
 - Growth rates with directional arrow: `+25.3%↑` or `-4.1%↓`
 - `N/A` for any missing data point
+- **Per-share metrics are split-adjusted** using `data/processed/{TICKER}/stock_splits.json` — all historical EPS, DPS, and book value per share are restated to current share basis for apples-to-apples comparison across years
 
 **Task 4 Outputs**:
 - `data/reports/{TICKER}/company_profile.md`
@@ -331,6 +400,7 @@ The script reads all JSON files from `data/processed/{TICKER}/` and queries Post
 - [ ] All 6 JSON files exist in `data/processed/{TICKER}/`
 - [ ] At least 3 years of annual data in all DB tables
 - [ ] Revenue figures in correct magnitude (billions vs millions — verify against XBRL)
+- [ ] **Stock split adjustment**: If the company has had stock splits, verify `stock_splits.json` exists and all per-share metrics (EPS, DPS, shares outstanding) are adjusted to the current share basis. Compare adjusted EPS against yfinance's split-adjusted values as a sanity check (should match within 1%)
 - [ ] Growth rates computed correctly: (current − prior) / prior
 - [ ] Margins sanity check: gross 20–90%, operating −20% to +80%
 - [ ] Management team: 3–5 executives with substantive bios (not placeholder text)
