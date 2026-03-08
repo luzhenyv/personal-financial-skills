@@ -6,7 +6,7 @@ from pathlib import Path
 
 import streamlit as st
 
-from streamlit_app.components.data_loader import CompanyPageData
+from streamlit_app.components.loaders.company import CompanyPageData
 
 
 def render_report_tab(d: CompanyPageData, rev_growth: float, wacc: float) -> None:

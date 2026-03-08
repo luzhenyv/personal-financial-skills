@@ -8,7 +8,7 @@ import plotly.graph_objects as go
 
 from streamlit_app.components.styles import COLORS
 from streamlit_app.components.utils import fmt_growth
-from streamlit_app.components.data_loader import CompanyPageData
+from streamlit_app.components.loaders.company import CompanyPageData
 
 
 def render_overview_tab(d: CompanyPageData) -> None:

@@ -144,3 +144,60 @@ _CSS = """
 def inject_css() -> None:
     """Inject global CSS into the Streamlit page. Call once per page."""
     st.markdown(_CSS, unsafe_allow_html=True)
+
+
+_THESIS_CSS = """
+<style>
+    .thesis-card {
+        background: #f8fafc;
+        border: 1px solid #e2e8f0;
+        border-radius: 0.75rem;
+        padding: 1rem 1.25rem;
+        margin-bottom: 0.75rem;
+    }
+    .thesis-card .thesis-ticker { font-weight: 700; font-size: 1.15rem; color: #1e293b; }
+    .thesis-card .thesis-position {
+        display: inline-block;
+        font-size: 0.75rem;
+        padding: 0.1rem 0.5rem;
+        border-radius: 1rem;
+        font-weight: 600;
+    }
+    .thesis-card .thesis-position.long  { background: #dcfce7; color: #166534; }
+    .thesis-card .thesis-position.short { background: #fef2f2; color: #991b1b; }
+    .thesis-card .thesis-core { font-size: 0.88rem; color: #475569; margin-top: 0.35rem; line-height: 1.5; }
+    .score-badge {
+        display: inline-block;
+        padding: 0.3rem 0.75rem;
+        border-radius: 1rem;
+        font-weight: 700;
+        font-size: 1.1rem;
+    }
+    .score-badge.high   { background: #dcfce7; color: #166534; }
+    .score-badge.medium { background: #fef9c3; color: #854d0e; }
+    .score-badge.low    { background: #fef2f2; color: #991b1b; }
+    .status-indicator {
+        display: inline-block;
+        width: 8px; height: 8px;
+        border-radius: 50%;
+        margin-right: 6px;
+    }
+    .status-indicator.intact { background: #10b981; }
+    .status-indicator.watch  { background: #f59e0b; }
+    .status-indicator.broken { background: #ef4444; }
+    .update-entry {
+        border-left: 3px solid #e2e8f0;
+        padding: 0.75rem 1rem;
+        margin-bottom: 0.5rem;
+        margin-left: 0.5rem;
+    }
+    .update-entry.strengthened { border-left-color: #10b981; }
+    .update-entry.weakened     { border-left-color: #ef4444; }
+    .update-entry.unchanged    { border-left-color: #64748b; }
+</style>
+"""
+
+
+def inject_thesis_css() -> None:
+    """Inject thesis-tracker-specific CSS. Call once on the Thesis Tracker page."""
+    st.markdown(_THESIS_CSS, unsafe_allow_html=True)

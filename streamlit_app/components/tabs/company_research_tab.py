@@ -8,7 +8,7 @@ import streamlit as st
 
 from streamlit_app.components.styles import COLORS
 from streamlit_app.components.utils import fmt_growth, fmt_pct
-from streamlit_app.components.data_loader import CompanyPageData
+from streamlit_app.components.loaders.company import CompanyPageData
 
 
 def render_research_tab(d: CompanyPageData) -> None:

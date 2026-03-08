@@ -24,12 +24,12 @@ from src.db.session import get_session
 from src.db.models import Company
 
 from streamlit_app.components.styles import inject_css
-from streamlit_app.components.data_loader import load_company_page_data
-from streamlit_app.components.tabs.overview_tab import render_overview_tab
-from streamlit_app.components.tabs.financials_tab import render_financials_tab
-from streamlit_app.components.tabs.valuation_tab import render_valuation_tab
-from streamlit_app.components.tabs.research_tab import render_research_tab
-from streamlit_app.components.tabs.report_tab import render_report_tab
+from streamlit_app.components.loaders.company import load_company_page_data
+from streamlit_app.components.tabs.company_overview_tab import render_overview_tab
+from streamlit_app.components.tabs.company_financials_tab import render_financials_tab
+from streamlit_app.components.tabs.company_valuation_tab import render_valuation_tab
+from streamlit_app.components.tabs.company_research_tab import render_research_tab
+from streamlit_app.components.tabs.company_report_tab import render_report_tab
 
 # ──────────────────────────────────────────────
 # Page config & global styles

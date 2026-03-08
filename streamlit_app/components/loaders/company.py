@@ -9,7 +9,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any
 
-from .utils import load_json, load_report_md
+from ..utils import load_json, load_report_md
 
 
 @dataclass
