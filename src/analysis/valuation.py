@@ -24,6 +24,7 @@ from src.db.models import (
     IncomeStatement,
 )
 from src.db.session import get_session
+from src.etl.yfinance_client import get_current_price
 
 logger = logging.getLogger(__name__)
 
@@ -420,20 +421,27 @@ def peer_comps(
 
 def scenario_analysis(
     ticker: str,
-    bull_growth: float = 0.20,
+    bull_growth: float | None = None,
     base_growth: float = 0.10,
-    bear_growth: float = 0.02,
+    bear_growth: float | None = None,
     wacc: float = 0.10,
     session: Session | None = None,
 ) -> ScenarioResult:
     """Run Bull/Base/Bear scenario analysis.
 
     Each scenario runs a DCF with different growth assumptions.
+    Bull/bear growth rates are derived relative to base if not specified.
     """
     ticker = ticker.upper()
     own_session = session is None
     if own_session:
         session = get_session()
+
+    # Default bull = base * 1.5, bear = base * 0.2 (but capped at sensible ranges)
+    if bull_growth is None:
+        bull_growth = min(base_growth * 1.5, 0.60)
+    if bear_growth is None:
+        bear_growth = max(base_growth * 0.2, 0.02)
 
     try:
         # Get current price
@@ -444,6 +452,13 @@ def scenario_analysis(
             .first()
         )
         current_price = float(price_row.adjusted_close) if price_row else None
+
+        # Fallback to yfinance for live price
+        if current_price is None:
+            try:
+                current_price = get_current_price(ticker)
+            except Exception:
+                pass
 
         scenarios = {}
         for name, growth, margin_adj, tg in [
@@ -530,6 +545,13 @@ def valuation_summary(
             .first()
         )
         current_price = float(price_row.adjusted_close) if price_row else None
+
+        # Fallback to yfinance for live price
+        if current_price is None:
+            try:
+                current_price = get_current_price(ticker)
+            except Exception:
+                pass
 
         # Run DCF
         dcf_result = None

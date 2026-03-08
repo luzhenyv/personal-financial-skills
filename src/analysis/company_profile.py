@@ -23,6 +23,7 @@ from src.db.models import (
     IncomeStatement,
 )
 from src.db.session import get_session
+from src.etl.yfinance_client import get_current_price, get_stock_info
 
 logger = logging.getLogger(__name__)
 
@@ -224,6 +225,16 @@ def _build_tearsheet(
     price_str = f"${float(latest_price.adjusted_close):.2f}" if latest_price else "N/A"
     mkt_cap_str = f"${company.market_cap / 1e9:.1f}B" if company.market_cap else "N/A"
     date_str = str(latest_price.date) if latest_price else datetime.now().strftime("%Y-%m-%d")
+
+    # Fallback to yfinance for live price/market data if DB has no prices
+    if not latest_price:
+        try:
+            yf_price = get_current_price(company.ticker)
+            if yf_price:
+                price_str = f"${yf_price:.2f}"
+                date_str = datetime.now().strftime("%Y-%m-%d")
+        except Exception:
+            pass
 
     lines.append(f"# {company.name} ({company.ticker}) — Tearsheet\n")
     lines.append(

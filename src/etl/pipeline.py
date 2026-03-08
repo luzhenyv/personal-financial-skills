@@ -25,6 +25,7 @@ from src.db.models import (
 from src.db.session import get_session
 from src.etl import sec_client, xbrl_parser
 from src.etl.price_client import get_daily_prices
+from src.etl.yfinance_client import get_stock_info
 
 logger = logging.getLogger(__name__)
 
@@ -91,6 +92,27 @@ def ingest_company(
         except Exception as e:
             result["errors"].append(f"Company metadata: {e}")
             logger.error(f"[{ticker}] Company metadata error: {e}")
+
+        # ── Step 2b: Enrich with Yahoo Finance (sector, industry, market cap, price) ──
+        try:
+            yf_info = get_stock_info(ticker)
+            if yf_info and "error" not in yf_info:
+                company = session.query(Company).filter_by(ticker=ticker).first()
+                if company:
+                    if yf_info.get("sector"):
+                        company.sector = yf_info["sector"]
+                    if yf_info.get("industry"):
+                        company.industry = yf_info["industry"]
+                    if yf_info.get("market_cap"):
+                        company.market_cap = yf_info["market_cap"]
+                    if yf_info.get("description"):
+                        company.description = yf_info["description"]
+                    if yf_info.get("website"):
+                        company.website = yf_info["website"]
+                    session.flush()
+                    logger.info(f"[{ticker}] yfinance: sector={company.sector}, mkt_cap=${company.market_cap}")
+        except Exception as e:
+            logger.warning(f"[{ticker}] yfinance enrichment skipped: {e}")
 
         # ── Step 3: Fetch XBRL facts ──
         try:

@@ -177,6 +177,7 @@ CASH_FLOW_TAGS: dict[str, list[str]] = {
     ],
     "capital_expenditure": [
         "PaymentsToAcquirePropertyPlantAndEquipment",
+        "PaymentsToAcquireProductiveAssets",
         "PaymentsForCapitalImprovements",
     ],
     "acquisitions": [
@@ -279,10 +280,45 @@ def _resolve_tag(
     return []
 
 
+def _resolve_tag_for_year(
+    facts: dict,
+    field_name: str,
+    tag_candidates: list[str],
+    unit_key: str,
+    min_year: int,
+    fiscal_year: int,
+    quarter: int | None = None,
+) -> tuple[list[dict], any]:
+    """Try each candidate tag until we find data for the specific target year.
+
+    Unlike _resolve_tag which returns the first tag with ANY data,
+    this function falls through to the next tag if no value is found
+    for the target fiscal year/quarter.
+    """
+    picker = _pick_quarterly if quarter else _pick_annual
+    pick_args = (fiscal_year, quarter) if quarter else (fiscal_year,)
+
+    for tag in tag_candidates:
+        values = _extract_fact_values(facts, tag, unit_key, min_year)
+        if not values:
+            continue
+        val = picker(values, *pick_args)
+        if val is not None:
+            logger.debug(f"  {field_name} → {tag} = {val} (FY{fiscal_year})")
+            return values, val
+
+    logger.debug(f"  {field_name} → NO DATA for FY{fiscal_year} (tried {len(tag_candidates)} tags)")
+    return [], None
+
+
 def _pick_annual(values: list[dict], fiscal_year: int) -> int | float | None:
     """Pick the best annual value for a fiscal year.
 
-    Prefer: form='10-K', fp='FY', most recent filing date.
+    Prefer: form='10-K', fp='FY', latest period end date, most recent filing.
+
+    10-K filings include comparison years (e.g., FY2025 10-K reports
+    FY2023, FY2024, FY2025 data — all tagged with fy=2025). We use
+    the period 'end' date to pick the correct (most recent period) entry.
     """
     candidates = [v for v in values if v["fy"] == fiscal_year]
     if not candidates:
@@ -298,8 +334,9 @@ def _pick_annual(values: list[dict], fiscal_year: int) -> int | float | None:
     if fy_vals:
         candidates = fy_vals
 
-    # Pick the most recently filed
-    candidates.sort(key=lambda x: x.get("filed", ""), reverse=True)
+    # Pick the latest period end date (to get the current year's data,
+    # not prior-year comparisons reported in the same filing)
+    candidates.sort(key=lambda x: (x.get("end", ""), x.get("filed", "")), reverse=True)
     return candidates[0]["val"]
 
 
@@ -327,8 +364,6 @@ def parse_income_statement(
     facts: dict[str, Any], fiscal_year: int, quarter: int | None = None
 ) -> dict[str, Any]:
     """Parse income statement data for a specific period."""
-    pick = _pick_quarterly if quarter else _pick_annual
-
     result = {"fiscal_year": fiscal_year, "fiscal_quarter": quarter}
     raw_values = {}
 
@@ -337,11 +372,9 @@ def parse_income_statement(
         if field in ("shares_basic", "shares_diluted"):
             unit = "shares"
 
-        values = _resolve_tag(facts, field, tags, unit, fiscal_year - 1)
-        if quarter:
-            val = _pick_quarterly(values, fiscal_year, quarter)
-        else:
-            val = _pick_annual(values, fiscal_year)
+        values, val = _resolve_tag_for_year(
+            facts, field, tags, unit, fiscal_year - 1, fiscal_year, quarter
+        )
 
         result[field] = val
         if values:
@@ -359,11 +392,9 @@ def parse_balance_sheet(
     raw_values = {}
 
     for field, tags in BALANCE_SHEET_TAGS.items():
-        values = _resolve_tag(facts, field, tags, "USD", fiscal_year - 1)
-        if quarter:
-            val = _pick_quarterly(values, fiscal_year, quarter)
-        else:
-            val = _pick_annual(values, fiscal_year)
+        values, val = _resolve_tag_for_year(
+            facts, field, tags, "USD", fiscal_year - 1, fiscal_year, quarter
+        )
         result[field] = val
         if values:
             raw_values[field] = {"tag": tags[0], "values": values[-3:]}
@@ -380,11 +411,9 @@ def parse_cash_flow(
     raw_values = {}
 
     for field, tags in CASH_FLOW_TAGS.items():
-        values = _resolve_tag(facts, field, tags, "USD", fiscal_year - 1)
-        if quarter:
-            val = _pick_quarterly(values, fiscal_year, quarter)
-        else:
-            val = _pick_annual(values, fiscal_year)
+        values, val = _resolve_tag_for_year(
+            facts, field, tags, "USD", fiscal_year - 1, fiscal_year, quarter
+        )
         result[field] = val
         if values:
             raw_values[field] = {"tag": tags[0], "values": values[-3:]}
@@ -401,24 +430,25 @@ def parse_cash_flow(
 
 
 def get_available_fiscal_years(facts: dict[str, Any], min_year: int = 2020) -> list[int]:
-    """Determine which fiscal years have data, using revenue as the anchor."""
-    us_gaap = facts.get("facts", {}).get("us-gaap", {})
+    """Determine which fiscal years have data, using revenue as the anchor.
 
-    # Try revenue tags to find years
+    Checks ALL revenue tag candidates and merges available years,
+    since companies may switch XBRL tags across different fiscal years.
+    """
+    us_gaap = facts.get("facts", {}).get("us-gaap", {})
+    all_years: set[int] = set()
+
+    # Check ALL revenue tags and merge years (companies switch tags over time)
     for tag in INCOME_STATEMENT_TAGS["revenue"]:
         tag_data = us_gaap.get(tag, {})
         units = tag_data.get("units", {}).get("USD", [])
-        if units:
-            years = set()
-            for item in units:
-                fy = item.get("fy", 0)
-                fp = item.get("fp", "")
-                if fy >= min_year and fp == "FY":
-                    years.add(fy)
-            if years:
-                return sorted(years)
+        for item in units:
+            fy = item.get("fy", 0)
+            fp = item.get("fp", "")
+            if fy >= min_year and fp == "FY":
+                all_years.add(fy)
 
-    return []
+    return sorted(all_years)
 
 
 def compute_metrics(

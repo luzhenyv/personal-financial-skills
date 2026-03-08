@@ -36,6 +36,7 @@ from src.analysis.valuation import (
 from src.config import settings
 from src.db.models import AnalysisReport
 from src.db.session import get_session
+from src.etl.yfinance_client import get_current_price
 
 logger = logging.getLogger(__name__)
 
@@ -125,9 +126,35 @@ def generate_investment_report(
 def _section_header(company, latest_price, val: ValuationSummary) -> str:
     price_str = f"${float(latest_price.adjusted_close):.2f}" if latest_price else "N/A"
     target_str = f"${val.target_price:.2f}" if val.target_price else "N/A"
-    upside_str = f"{val.upside_pct * 100:+.1f}%" if val.upside_pct is not None else "N/A"
     mkt_cap = f"${company.market_cap / 1e9:.1f}B" if company.market_cap else "N/A"
     date_str = datetime.now().strftime("%B %d, %Y")
+
+    # Fallback to yfinance for live price if DB has no prices
+    current_price_val = float(latest_price.adjusted_close) if latest_price else None
+    if not latest_price:
+        try:
+            yf_price = get_current_price(company.ticker)
+            if yf_price:
+                price_str = f"${yf_price:.2f}"
+                current_price_val = yf_price
+        except Exception:
+            pass
+
+    # Compute upside using actual price
+    if current_price_val and val.target_price:
+        upside_pct = (val.target_price - current_price_val) / current_price_val
+        upside_str = f"{upside_pct * 100:+.1f}%"
+        val.upside_pct = upside_pct
+        val.current_price = current_price_val  # Store for later use
+        # Update recommendation based on actual price
+        if upside_pct > 0.15:
+            val.recommendation = "BUY"
+        elif upside_pct < -0.10:
+            val.recommendation = "SELL"
+        else:
+            val.recommendation = "HOLD"
+    else:
+        upside_str = f"{val.upside_pct * 100:+.1f}%" if val.upside_pct is not None else "N/A"
 
     return f"""# {company.name} ({company.ticker}) — Investment Research Report
 
