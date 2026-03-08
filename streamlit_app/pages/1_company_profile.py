@@ -82,8 +82,25 @@ with st.sidebar:
 
     st.markdown("---")
     st.subheader("Valuation Parameters")
-    rev_growth = st.slider("Revenue Growth (%)", 0, 80, 12) / 100.0
-    wacc_param = st.slider("WACC (%)", 5, 20, 10) / 100.0
+    rev_growth = st.slider(
+        "Revenue Growth (%)", 0, 80, 12,
+        help=(
+            "**Revenue Growth** is the projected annual rate at which the company's "
+            "top-line revenue will expand over the DCF forecast period. "
+            "Higher growth assumptions increase intrinsic value estimates. "
+            "Typical ranges: mature companies 2–8%, high-growth companies 15–40%+."
+        ),
+    ) / 100.0
+    wacc_param = st.slider(
+        "WACC (%)", 5, 20, 10,
+        help=(
+            "**Weighted Average Cost of Capital (WACC)** is the blended rate used to "
+            "discount future free cash flows back to present value. It reflects the "
+            "required return of both equity and debt holders, weighted by their share "
+            "of total capital. A higher WACC lowers the DCF valuation. "
+            "Typical ranges: large-cap 7–10%, small/high-risk companies 12–18%+."
+        ),
+    ) / 100.0
     st.caption("Used for DCF & investment report")
 
     session.close()
