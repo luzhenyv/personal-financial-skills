@@ -9,16 +9,25 @@ Generate a comprehensive company profile report through a structured 4-task work
 
 ## Overview
 
-This skill produces company profile reports sourced primarily from **SEC 10-K/Q filings** (the authoritative source), supplemented by yfinance, Alpha Vantage, and web search. Unlike a simple tearsheet, the output includes management team analysis, competitive landscape, comparable company analysis, and risks/opportunities extracted from actual filings.
+This skill produces company profile reports sourced primarily from **SEC 10-K/Q filings** (the authoritative source), supplemented by yfinance and web search. The output includes management team analysis, competitive landscape, comparable company analysis, and risks/opportunities extracted from actual filings.
 
 **Data Flow**:
 ```
-SEC EDGAR (10-K/Q PDF) → data/raw/{ticker}/
-LLM-parsed + cross-referenced → data/processed/{ticker}/
-Structured financials → PostgreSQL
-Report → data/reports/{ticker}/company_profile.md + analysis_reports table
-Interactive view → Streamlit app
+SEC EDGAR (10-K/Q HTML) → data/raw/{ticker}/
+Raw section text       → data/processed/{ticker}/10k_raw_sections.json
+AI-parsed structured   → data/processed/{ticker}/*.json
+Structured financials  → PostgreSQL (via XBRL ETL)
+Report                 → data/reports/{ticker}/company_profile.md + analysis_reports table
+Interactive view       → Streamlit app at http://localhost:8501
 ```
+
+**Scripts** (in `skills/company-profile/scripts/`):
+
+| Script | Purpose | Task |
+|--------|---------|------|
+| `ingest.py {TICKER}` | XBRL→DB + download 10-K/Q + extract raw section text | 1 |
+| `build_comps.py {TICKER}` | Build comparable company table via yfinance | 3 |
+| `generate_report.py {TICKER}` | Assemble final markdown report from all JSON + DB | 4 |
 
 ---
 
@@ -32,285 +41,301 @@ User asks for company overview, profile, tearsheet, or "tell me about {ticker}".
 
 | Task | Name | Prerequisites | Output |
 |------|------|--------------|--------|
-| **1** | Data Ingestion | Ticker symbol | Raw filings + structured DB data |
-| **2** | Company Research | Task 1 data | Management, competitive landscape, risks/opportunities |
-| **3** | Financial Analysis | Tasks 1-2 | Metrics, margins, comparable companies |
-| **4** | Report Generation | Tasks 1-3 | Markdown profile + DB upsert |
+| **1** | Data Ingestion | Ticker symbol | Raw filings + raw sections + DB |
+| **2** | Company Research | `10k_raw_sections.json` | 6 structured JSON files |
+| **3** | Financial Analysis | Tasks 1–2 | `comps_table.json` |
+| **4** | Report Generation | Tasks 1–3 | `company_profile.md` + DB row |
 
-**Default mode**: Run all 4 tasks sequentially in a single invocation. If the user requests a specific task, execute only that task.
+**Default mode**: Run all 4 tasks sequentially. If the user requests a specific task, execute only that task.
 
 ---
 
 ## Task 1: Data Ingestion
 
-**Purpose**: Fetch SEC filings and market data; load structured financials into PostgreSQL.
+**Purpose**: Fetch SEC filings, ingest XBRL financials to PostgreSQL, extract 10-K section text.
 
-### Step 1.1: Resolve Ticker → CIK
-```python
-from src.etl.pipeline import ingest_company
-from src.etl import sec_client
-
-cik = sec_client.ticker_to_cik("{ticker}")
+### Run the script:
+```bash
+uv run python skills/company-profile/scripts/ingest.py {TICKER}
+# Optional flags:
+#   --years 7        load 7 years of history (default: 5)
+#   --quarterly      also load quarterly statements
 ```
 
-### Step 1.2: Download 10-K/Q Filings
-Fetch the latest 10-K (annual) and most recent 10-Q from SEC EDGAR.
+The script does the following automatically:
+1. **Resolve ticker → CIK** via SEC company_tickers.json
+2. **Run XBRL ETL** (`ingest_company()`) → income statements, balance sheets, cash flows, derived metrics → PostgreSQL
+3. **Download latest 10-K and 10-Q HTML** → `data/raw/{TICKER}/`
+4. **Extract raw section text** from 10-K → `data/processed/{TICKER}/10k_raw_sections.json`:
+   - `item1_business` — Item 1: Business description
+   - `item1a_risk_factors` — Item 1A: Risk Factors
+   - `item7_mda` — Item 7: MD&A
+   - `item10_directors` — Item 10: Executive Officers
 
-- Get filing index via `sec_client.get_recent_filings(cik, filing_types=['10-K', '10-Q'])`
-- Download the primary document PDF for each filing
-- **Save PDFs to `data/raw/{ticker}/`** (e.g. `10-K_2025.pdf`, `10-Q_Q3_2025.pdf`)
-- User will review these raw files
-
-### Step 1.3: Parse Filings with LLM
-Read the 10-K/Q PDFs and extract:
-- Business description (Item 1)
-- Risk factors (Item 1A)
-- MD&A discussion (Item 7)
-- Executive officers (Item 10 / proxy)
-- Revenue segments, geographic breakdown
-- Key metrics, guidance, outlook
-
-Save LLM-parsed structured output as JSON to **`data/processed/{ticker}/`**:
-- `company_overview.json` — business description, history, products
-- `management_team.json` — executives with bios, tenure, compensation
-- `risk_factors.json` — categorized risks from Item 1A
-- `competitive_landscape.json` — competitors mentioned in filings + agent research
-- `financial_segments.json` — revenue by segment/geography from filings
-
-### Step 1.4: Cross-Reference with Market Data
-Supplement filing data with yfinance and Alpha Vantage:
-```python
-from src.etl.yfinance_client import get_stock_info, get_peers, get_current_price
-info = get_stock_info("{ticker}")
-peers = get_peers("{ticker}")
-```
-Use market data to validate and enrich LLM-parsed figures (e.g., check revenue/EPS match between filing parse and yfinance).
-
-### Step 1.5: Ingest Structured Data to PostgreSQL
-```python
-result = ingest_company("{ticker}")
-```
-This runs the full ETL pipeline: XBRL facts → income statements, balance sheets, cash flows, derived metrics, price data → PostgreSQL.
-
-### Step 1.6: Verify Data Completeness
+### Verify completeness:
 ```sql
-SELECT COUNT(*) FROM income_statements WHERE ticker = '{ticker}';
-SELECT COUNT(*) FROM balance_sheets WHERE ticker = '{ticker}';
-SELECT COUNT(*) FROM cash_flow_statements WHERE ticker = '{ticker}';
+SELECT fiscal_year, revenue/1e9 AS rev_b, gross_margin*100 AS gm_pct
+FROM income_statements i
+JOIN financial_metrics m USING (ticker, fiscal_year)
+WHERE i.ticker = '{ticker}' AND i.fiscal_quarter IS NULL
+ORDER BY fiscal_year;
 ```
-Require at least 3 years of annual data before proceeding.
+Require **at least 3 years** of annual data before proceeding.
 
 **Task 1 Outputs**:
-- `data/raw/{ticker}/` — 10-K/Q PDFs and XBRL JSON
-- `data/processed/{ticker}/` — LLM-parsed JSON files
-- PostgreSQL tables populated
+- `data/raw/{TICKER}/10-K_{date}.htm` — raw annual filing
+- `data/raw/{TICKER}/10-Q_{date}.htm` — most recent quarterly filing
+- `data/processed/{TICKER}/10k_raw_sections.json` — extracted section text
+- PostgreSQL: `companies`, `income_statements`, `balance_sheets`, `cash_flow_statements`, `financial_metrics`, `sec_filings`
 
 ---
 
-## Task 2: Company Research
+## Task 2: Company Research (AI-Driven)
 
-**Purpose**: Build qualitative understanding — management, competition, risks, opportunities — primarily from 10-K/Q content.
+**Purpose**: Read the raw 10-K sections and produce 6 structured JSON files. This task is entirely AI-driven — no script is needed. Read `data/processed/{TICKER}/10k_raw_sections.json` and create each file below.
 
-**Prerequisites**: Task 1 complete (parsed filings in `data/processed/{ticker}/`)
+### JSON files to create in `data/processed/{TICKER}/`:
 
-### Step 2.1: Management Team
-From 10-K Item 10, proxy (DEF 14A), and web search:
+#### `company_overview.json`
+```json
+{
+  "ticker": "AAPL",
+  "company_name": "Apple Inc.",
+  "cik": "0000320193",
+  "fiscal_year": 2025,
+  "fiscal_year_end": "September",
+  "source": "10-K FY2025 Item 1",
+  "description": "...",        // 2-3 sentence business description from Item 1
+  "business_overview": "...",  // additional detail, 1-2 paragraphs
+  "revenue_model": "...",      // how the company monetizes
+  "customers": "...",          // key customer segments
+  "segments": [
+    {
+      "name": "iPhone",
+      "description": "...",
+      "revenue_fy_b": 210.0,
+      "yoy_growth_pct": 5.2
+    }
+  ],
+  "products": ["...", "..."],
+  "geographic_revenue": {
+    "Americas": "~42%",
+    "Europe": "~25%"
+  }
+}
+```
 
-For **3-5 key executives** (CEO, CFO, + 1-3 others):
-- Name, title, age, tenure at company
-- Prior roles (last 2-3 positions)
-- Key accomplishments and track record
-- Compensation summary (from proxy if available)
-- Insider ownership percentage
+#### `management_team.json`
+```json
+{
+  "ticker": "AAPL",
+  "source": "10-K FY2025 Item 10 + proxy DEF 14A",
+  "executives": [
+    {
+      "name": "Tim Cook",
+      "title": "Chief Executive Officer",
+      "age": 64,
+      "tenure_years": 14,
+      "prior_roles": ["COO at Apple", "VP Operations at Compaq"],
+      "accomplishments": "...",
+      "insider_ownership_pct": "~0.02%"
+    }
+  ],
+  "board": {
+    "size": 8,
+    "independent_directors": 7,
+    "notable_members": ["..."]
+  },
+  "governance_notes": "..."
+}
+```
 
-Also note:
-- Board composition and independence
-- Recent management changes
-- Governance quality assessment
+#### `risk_factors.json`
+```json
+{
+  "ticker": "AAPL",
+  "source": "10-K FY2025 Item 1A",
+  "risks": [
+    {
+      "category": "Company-Specific",   // Company-Specific | Industry/Market | Financial | Macro
+      "title": "Supply chain concentration",
+      "description": "..."              // 1-2 sentences, verbatim or close paraphrase from 10-K
+    }
+  ]
+}
+```
+Include **8–12 risks** across 4 categories: Company-Specific (4–6), Industry/Market (2–3), Financial (1–2), Macro (1–2).
 
-### Step 2.2: Products & Business Model
-From 10-K Item 1 and MD&A:
-- Product/service portfolio with descriptions
-- Revenue model (subscription, transaction, license, etc.)
-- Customer segments (enterprise, SMB, consumer, government)
-- Geographic distribution of revenue
-- Key partnerships and distribution channels
+#### `competitive_landscape.json`
+```json
+{
+  "ticker": "AAPL",
+  "source": "10-K FY2025 + market research",
+  "moat": "...",
+  "competitive_positioning": "...",
+  "competitors": [
+    {
+      "name": "Samsung Electronics",
+      "ticker": "005930.KS",
+      "market_cap_b": 280,
+      "products_competing": "...",
+      "competitive_advantage_vs_subject": "...",
+      "market_share": "..."
+    }
+  ]
+}
+```
+Include **5–8 competitors** (direct + indirect). The `ticker` field is used by `build_comps.py` for peer data — use the primary exchange ticker (e.g. `SAMSG` → use `SSNLF` for OTC, or omit non-tradeable).
 
-### Step 2.3: Competitive Landscape
-From 10-K mentions, web search, and agent knowledge:
+#### `financial_segments.json`
+```json
+{
+  "ticker": "AAPL",
+  "source": "10-K FY2025 MD&A",
+  "fiscal_year": 2025,
+  "segments": [
+    { "name": "iPhone", "revenue_fy_b": 210.0, "revenue_prior_fy_b": 200.6, "yoy_growth_pct": 4.7, "description": "..." }
+  ],
+  "geographic_revenue_fy": {
+    "Americas": { "revenue_b": 165.0, "pct": 42.0 }
+  }
+}
+```
 
-Identify **5-8 competitors** (direct + indirect). For each:
-- Company name, ticker (if public), market cap
-- Key products competing in same space
-- Estimated market share (if available)
-- Competitive advantage vs. subject company
+#### `investment_thesis.json`
+```json
+{
+  "ticker": "AAPL",
+  "source": "10-K FY2025 MD&A + analysis",
+  "bull_case": [
+    {
+      "title": "Services revenue flywheel",
+      "description": "..."     // 2-3 sentences with specific data points
+    }
+  ],
+  "opportunities": [
+    {
+      "title": "Apple Intelligence / AI expansion",
+      "description": "..."
+    }
+  ]
+}
+```
+Include **4–6 bull case points** and **3–5 opportunities**, each with specific data or filing references.
 
-Create a competitive positioning summary:
-- Company's moat / competitive advantages
-- Competitive vulnerabilities
-- Switching costs and network effects
-- Market concentration (fragmented vs. consolidated)
+### Step 2 guidelines:
+- Source each fact to Item 1, Item 1A, or Item 7 of the 10-K
+- For risk_factors.json: quote or closely paraphrase actual Item 1A language
+- For competitive_landscape.json: use tickers that `build_comps.py` can look up on Yahoo Finance
+- Cross-check revenue segment figures against the XBRL data in PostgreSQL
 
-### Step 2.4: TAM & Industry
-From 10-K, industry reports, web search:
-- Total Addressable Market (TAM) size and growth rate
-- Industry growth drivers and headwinds
-- Regulatory environment
-- Technology trends affecting the industry
-
-### Step 2.5: Risks & Opportunities
-**From 10-K Item 1A (Risk Factors)** — extract and categorize:
-
-**Risks** (8-12 items across 4 categories):
-- Company-Specific (4-6): execution, concentration, key person, technology
-- Industry/Market (2-3): competition, regulation, disruption
-- Financial (1-2): debt, liquidity, profitability
-- Macro (1-2): economic cycle, FX, geopolitical
-
-**Opportunities** (3-5 items):
-- New markets or products mentioned in MD&A
-- Secular tailwinds
-- Margin expansion drivers
-- M&A or strategic initiatives
-
-Each risk/opportunity: 1-2 sentences sourced from the actual filing.
-
-**Task 2 Outputs**:
-- Updated JSON files in `data/processed/{ticker}/`
-- Qualitative research ready for report assembly
+**Task 2 Outputs**: 6 JSON files in `data/processed/{TICKER}/`
 
 ---
 
 ## Task 3: Financial Analysis
 
-**Purpose**: Quantitative analysis — historical financials, margins, returns, and comparable company analysis.
+**Purpose**: Build comparable company analysis table.
 
-**Prerequisites**: Task 1 complete (PostgreSQL data), Task 2 complete (peer list)
-
-### Step 3.1: Query Historical Financials
-```sql
-SELECT * FROM income_statements
-WHERE ticker = '{ticker}' AND fiscal_quarter IS NULL
-ORDER BY fiscal_year DESC LIMIT 5;
-
-SELECT * FROM balance_sheets
-WHERE ticker = '{ticker}' AND fiscal_quarter IS NULL
-ORDER BY fiscal_year DESC LIMIT 5;
-
-SELECT * FROM cash_flow_statements
-WHERE ticker = '{ticker}' AND fiscal_quarter IS NULL
-ORDER BY fiscal_year DESC LIMIT 5;
-
-SELECT * FROM financial_metrics
-WHERE ticker = '{ticker}' AND fiscal_quarter IS NULL
-ORDER BY fiscal_year DESC LIMIT 5;
+### Run the script:
+```bash
+uv run python skills/company-profile/scripts/build_comps.py {TICKER}
+# Optional: override peer list
+uv run python skills/company-profile/scripts/build_comps.py {TICKER} --peers AMD,INTC,AVGO,QCOM
 ```
 
-### Step 3.2: Compute Key Metrics Table
-5-year history of:
-- Revenue, Revenue Growth
-- Gross Profit, Operating Income, Net Income, EPS (Diluted)
-- Free Cash Flow
-- Margins: Gross, Operating, Net, FCF
-- Returns: ROE, ROA, ROIC
-- Leverage: Current Ratio, Debt/Equity
+The script:
+1. Reads peer tickers from `competitive_landscape.json` (preferred — uses the curated list from Task 2)
+2. Falls back to yfinance peer discovery if the JSON is absent
+3. Fetches market cap, revenue LTM, revenue growth, gross/op margins, P/E fwd, EV/EBITDA, P/S for each peer
+4. Computes peer median / mean / min / max
+5. Saves → `data/processed/{TICKER}/comps_table.json`
 
-### Step 3.3: Latest Price & Valuation
-```python
-from src.etl.yfinance_client import get_current_price, get_stock_info
-price = get_current_price("{ticker}")
-info = get_stock_info("{ticker}")
-```
-Compute: P/E, P/S, P/B, EV/EBITDA, FCF Yield.
-
-### Step 3.4: Comparable Company Analysis
-Using peers from Task 2 (5-8 companies), build a comps table:
-
-| Metric | {ticker} | Peer 1 | Peer 2 | ... | Median |
-|--------|----------|--------|--------|-----|--------|
-| Market Cap | | | | | |
-| Revenue (LTM) | | | | | |
-| Revenue Growth | | | | | |
-| Gross Margin | | | | | |
-| Operating Margin | | | | | |
-| P/E | | | | | |
-| EV/EBITDA | | | | | |
-| P/S | | | | | |
-
-For each peer, fetch data via yfinance: `get_stock_info(peer_ticker)`.
-
-Include statistical summary row: Median, Mean, Min, Max.
-
-Highlight where subject company trades at premium/discount to peer median.
+**Note on historical financials**: The 5-year financial table and returns analysis are computed directly from PostgreSQL by `generate_report.py` in Task 4. No separate step needed here.
 
 **Task 3 Outputs**:
-- Financial metrics computed and validated
-- Comparable company analysis table
-- Valuation context
+- `data/processed/{TICKER}/comps_table.json`
 
 ---
 
 ## Task 4: Report Generation
 
-**Purpose**: Assemble all data into a comprehensive markdown report and save.
+**Purpose**: Assemble all data into a comprehensive markdown report.
 
-**Prerequisites**: Tasks 1-3 complete
-
-### Step 4.1: Build Report
-Use the template in `references/tearsheet-template.md`. Fill all sections:
-
-1. **Header** — ticker, sector, industry, price, market cap, date
-2. **Business Summary** — from 10-K Item 1 (LLM-parsed), not generic
-3. **Management Team** — 3-5 executives with bios from Task 2
-4. **Key Financial Metrics** — 5-year table from Task 3
-5. **Margin Analysis** — with trends
-6. **Balance Sheet Snapshot** — latest year
-7. **Returns & Efficiency** — ROE, ROA, ROIC
-8. **Valuation** — current multiples
-9. **Comparable Company Analysis** — peer comps table from Task 3
-10. **Competitive Landscape** — positioning and moat from Task 2
-11. **Investment Thesis** — bull case bullets (from filing analysis)
-12. **Key Risks** — from 10-K Item 1A (Task 2)
-13. **Opportunities & Catalysts** — from MD&A (Task 2)
-
-### Step 4.2: Formatting Rules
-- Dollar amounts in billions (÷ 1e9) for revenue/assets, millions for smaller items
-- Percentages to 1 decimal place
-- Growth rates with arrow: `+25.3%↑` or `-4.1%↓`
-- Use `N/A` for missing data, never leave blank
-- All data points attributable to source (10-K, yfinance, etc.)
-
-### Step 4.3: Save Report
-1. Write markdown to `data/reports/{ticker}/company_profile.md`
-2. Upsert to `analysis_reports` table:
-```sql
-INSERT INTO analysis_reports (ticker, report_type, title, content_md, generated_by, file_path)
-VALUES ('{ticker}', 'company_profile', '{name} Company Profile', '{content}', 'claude', '{path}')
-ON CONFLICT (ticker, report_type) DO UPDATE SET content_md = EXCLUDED.content_md;
+### Run the script:
+```bash
+uv run python skills/company-profile/scripts/generate_report.py {TICKER}
+# Optional: supply price if yfinance is stale
+uv run python skills/company-profile/scripts/generate_report.py {TICKER} --price 225.50
 ```
 
+The script reads all JSON files from `data/processed/{TICKER}/` and queries PostgreSQL to produce a report with these sections:
+
+1. **Header** — ticker, price, market cap, sector, industry, date
+2. **Business Summary** — from `company_overview.json` (10-K Item 1)
+3. **Management Team** — from `management_team.json`
+4. **Key Financial Metrics** — 5-year table from PostgreSQL
+5. **Margin Analysis** — with YoY trend commentary
+6. **Balance Sheet Snapshot** — latest vs prior year
+7. **Returns & Efficiency** — ROE, ROA, ROIC
+8. **Valuation** — P/E fwd/TTM, EV/EBITDA, P/S, P/B, FCF Yield
+9. **Comparable Company Analysis** — from `comps_table.json`
+10. **Competitive Landscape** — from `competitive_landscape.json`
+11. **Investment Thesis** — from `investment_thesis.json`
+12. **Key Risks** — from `risk_factors.json`
+13. **Opportunities & Catalysts** — from `investment_thesis.json`
+14. **Appendix** — data sources
+
+**Formatting rules** applied by the script:
+- Dollar amounts in billions (`$16.7B`) for revenue/assets; millions for smaller items
+- Percentages to 1 decimal place
+- Growth rates with directional arrow: `+25.3%↑` or `-4.1%↓`
+- `N/A` for any missing data point
+
 **Task 4 Outputs**:
-- `data/reports/{ticker}/company_profile.md`
-- `analysis_reports` table row
-- User can view interactive version via Streamlit app at `http://localhost:8501`
+- `data/reports/{TICKER}/company_profile.md`
+- `analysis_reports` table row (PostgreSQL)
+- View in Streamlit: `http://localhost:8501`
 
 ---
 
 ## Quality Checks
 
-- [ ] 10-K/Q PDFs saved to `data/raw/{ticker}/`
-- [ ] Parsed JSONs saved to `data/processed/{ticker}/`
-- [ ] At least 3 years of annual financial data in all tables
-- [ ] Revenue figures in correct magnitude (billions vs millions)
-- [ ] Growth rates match: (current - prior) / prior
-- [ ] Margins between -100% and +100% (sanity check)
-- [ ] Management team has 3-5 executives with substantive bios
-- [ ] Competitive landscape has 5-8 named competitors
-- [ ] Comparable company table has peer data (not all N/A)
-- [ ] Risks sourced from actual 10-K Item 1A language
-- [ ] File saved to both filesystem and database
+- [ ] `data/raw/{TICKER}/10-K_*.htm` exists (raw annual filing downloaded)
+- [ ] `data/processed/{TICKER}/10k_raw_sections.json` exists with non-empty sections
+- [ ] All 6 JSON files exist in `data/processed/{TICKER}/`
+- [ ] At least 3 years of annual data in all DB tables
+- [ ] Revenue figures in correct magnitude (billions vs millions — verify against XBRL)
+- [ ] Growth rates computed correctly: (current − prior) / prior
+- [ ] Margins sanity check: gross 20–90%, operating −20% to +80%
+- [ ] Management team: 3–5 executives with substantive bios (not placeholder text)
+- [ ] Competitive landscape: 5–8 competitors with valid tickers for comps lookup
+- [ ] `comps_table.json` has actual data (not all N/A)
+- [ ] Risk factors sourced from Item 1A language
+- [ ] `investment_thesis.json` has 4–6 bull case items with data points
+- [ ] Report saved to both filesystem and database
+
+---
+
+## Scripts Reference
+
+All scripts live in `skills/company-profile/scripts/` and are run from the **project root**:
+
+```bash
+# Full workflow for any ticker
+uv run python skills/company-profile/scripts/ingest.py {TICKER}
+# → Then complete Task 2 manually (create 6 JSON files)
+uv run python skills/company-profile/scripts/build_comps.py {TICKER}
+uv run python skills/company-profile/scripts/generate_report.py {TICKER}
+```
+
+| Script | Key args | Output files |
+|--------|---------|-------------|
+| `ingest.py TICKER` | `--years N`, `--quarterly` | `data/raw/TICKER/`, `data/processed/TICKER/10k_raw_sections.json`, PostgreSQL |
+| `build_comps.py TICKER` | `--peers A,B,C` | `data/processed/TICKER/comps_table.json` |
+| `generate_report.py TICKER` | `--price N.NN` | `data/reports/TICKER/company_profile.md`, `analysis_reports` DB row |
 
 ## Reference Files
 
-- `references/tearsheet-template.md` — Markdown template to fill
+- `references/tearsheet-template.md` — Report section template
 - `references/data-sources.md` — Where each data point comes from
