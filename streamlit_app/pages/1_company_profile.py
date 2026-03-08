@@ -145,11 +145,11 @@ st.markdown(
 )
 
 # KPI row
-latest_rev = d.incomes[0].get("revenue") if d.incomes else None
-latest_gm = d.metrics[0].get("gross_margin") if d.metrics else None
-latest_rev_g = d.metrics[0].get("revenue_growth") if d.metrics else None
+latest_rev = d.incomes[-1].get("revenue") if d.incomes else None
+latest_gm = d.metrics[-1].get("gross_margin") if d.metrics else None
+latest_rev_g = d.metrics[-1].get("revenue_growth") if d.metrics else None
 pe_fwd = d.yf_info.get("pe_forward")
-latest_ni = d.incomes[0].get("net_income") if d.incomes else None
+latest_ni = d.incomes[-1].get("net_income") if d.incomes else None
 
 kpi_items = [
     ("Price", price_str),
