@@ -20,8 +20,9 @@ import streamlit as st
 # Add project root to path for src.* imports
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "../.."))
 
-from src.db.session import get_session
-from src.db.models import Company
+import httpx
+
+API_BASE_URL = os.environ.get("API_BASE_URL", "http://localhost:8000")
 
 from streamlit_app.components.styles import inject_css
 from streamlit_app.components.loaders.company import load_company_page_data
@@ -47,9 +48,14 @@ st.title("🏢 Company Profile")
 with st.sidebar:
     st.header("Company Selection")
 
-    session = get_session()
-    companies = session.query(Company).order_by(Company.ticker).all()
-    ticker_options = [f"{c.ticker} — {c.name}" for c in companies]
+    try:
+        resp = httpx.get(f"{API_BASE_URL}/api/companies/", timeout=10)
+        resp.raise_for_status()
+        companies = resp.json()
+    except Exception:
+        companies = []
+
+    ticker_options = [f"{c['ticker']} — {c['name']}" for c in companies]
 
     if ticker_options:
         selected = st.selectbox("Select Company", ticker_options)
@@ -69,15 +75,20 @@ with st.sidebar:
 
         if submitted and new_ticker:
             with st.spinner(f"Fetching data for {new_ticker.upper()}..."):
-                from src.etl.pipeline import ingest_company
-
-                result = ingest_company(new_ticker, years=years, include_prices=include_prices)
-                if result["errors"]:
-                    st.warning(f"Completed with warnings: {result['errors']}")
-                else:
-                    st.success(
-                        f"✅ Loaded {result['income_statements']} years of data for {new_ticker.upper()}"
+                try:
+                    resp = httpx.post(
+                        f"{API_BASE_URL}/api/etl/ingest",
+                        json={"ticker": new_ticker, "years": years},
+                        timeout=10,
                     )
+                    resp.raise_for_status()
+                    result = resp.json()
+                    st.success(
+                        f"✅ Ingestion started for {new_ticker.upper()} "
+                        f"(ETL run #{result.get('etl_run_id', '?')})"
+                    )
+                except Exception as e:
+                    st.error(f"Failed to trigger ingestion: {e}")
                 st.rerun()
 
     st.markdown("---")
@@ -102,8 +113,6 @@ with st.sidebar:
         ),
     ) / 100.0
     st.caption("Used for DCF & investment report")
-
-    session.close()
 
 # ──────────────────────────────────────────────
 # Guard — no company selected

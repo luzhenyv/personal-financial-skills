@@ -217,34 +217,6 @@ CREATE TABLE daily_prices (
 );
 
 -- ============================================
--- PORTFOLIO
--- ============================================
-
-CREATE TABLE portfolio_holdings (
-    id SERIAL PRIMARY KEY,
-    ticker VARCHAR(10) NOT NULL REFERENCES companies(ticker),
-    shares NUMERIC(12,4) NOT NULL,
-    avg_cost_basis NUMERIC(12,4) NOT NULL,
-    purchase_date DATE,
-    notes TEXT,
-    is_active BOOLEAN DEFAULT TRUE,
-    created_at TIMESTAMP DEFAULT NOW(),
-    updated_at TIMESTAMP DEFAULT NOW()
-);
-
-CREATE TABLE portfolio_transactions (
-    id SERIAL PRIMARY KEY,
-    ticker VARCHAR(10) NOT NULL REFERENCES companies(ticker),
-    action VARCHAR(10) NOT NULL,
-    shares NUMERIC(12,4) NOT NULL,
-    price NUMERIC(12,4) NOT NULL,
-    date DATE NOT NULL,
-    fees NUMERIC(8,2) DEFAULT 0,
-    notes TEXT,
-    created_at TIMESTAMP DEFAULT NOW()
-);
-
--- ============================================
 -- ANALYSIS REPORTS
 -- ============================================
 
@@ -294,62 +266,6 @@ CREATE TABLE watchlist (
 );
 
 -- ============================================
--- THESIS TRACKER
--- ============================================
-
-CREATE TABLE investment_theses (
-    id SERIAL PRIMARY KEY,
-    ticker VARCHAR(10) NOT NULL REFERENCES companies(ticker),
-    position VARCHAR(10) NOT NULL DEFAULT 'long',        -- 'long' or 'short'
-    status VARCHAR(20) NOT NULL DEFAULT 'active',         -- 'active', 'watching', 'closed'
-    core_thesis TEXT NOT NULL,
-    buy_reasons JSONB NOT NULL DEFAULT '[]',              -- [{title, description}]
-    assumptions JSONB NOT NULL DEFAULT '[]',              -- [{description, weight, kpi_metric, kpi_thresholds}]
-    sell_conditions JSONB NOT NULL DEFAULT '[]',          -- [string]
-    risk_factors JSONB NOT NULL DEFAULT '[]',             -- [{description}]
-    target_price NUMERIC(12,4),
-    stop_loss_price NUMERIC(12,4),
-    objective_weight NUMERIC(3,2) NOT NULL DEFAULT 0.60,  -- weight for objective score
-    subjective_weight NUMERIC(3,2) NOT NULL DEFAULT 0.40, -- weight for subjective score
-    created_at TIMESTAMP DEFAULT NOW(),
-    updated_at TIMESTAMP DEFAULT NOW(),
-    closed_at TIMESTAMP,
-    close_reason TEXT,
-    UNIQUE(ticker, status) -- only one active thesis per ticker
-);
-
-CREATE TABLE thesis_updates (
-    id SERIAL PRIMARY KEY,
-    ticker VARCHAR(10) NOT NULL REFERENCES companies(ticker),
-    thesis_id INT NOT NULL REFERENCES investment_theses(id),
-    event_date DATE NOT NULL,
-    event_title VARCHAR(255) NOT NULL,
-    event_description TEXT,
-    assumption_impacts JSONB DEFAULT '{}',                -- {assumption_idx: {status, explanation}}
-    strength_change VARCHAR(20) NOT NULL DEFAULT 'unchanged', -- 'strengthened', 'weakened', 'unchanged'
-    action_taken VARCHAR(20) NOT NULL DEFAULT 'hold',     -- 'hold', 'add', 'trim', 'exit'
-    conviction VARCHAR(10) NOT NULL DEFAULT 'medium',     -- 'high', 'medium', 'low'
-    notes TEXT,
-    source VARCHAR(50) NOT NULL DEFAULT 'manual',         -- 'manual', 'earnings', 'catalyst'
-    created_at TIMESTAMP DEFAULT NOW()
-);
-
-CREATE TABLE thesis_health_checks (
-    id SERIAL PRIMARY KEY,
-    ticker VARCHAR(10) NOT NULL REFERENCES companies(ticker),
-    thesis_id INT NOT NULL REFERENCES investment_theses(id),
-    check_date DATE NOT NULL DEFAULT CURRENT_DATE,
-    objective_score NUMERIC(5,2),                         -- 0-100
-    subjective_score NUMERIC(5,2),                        -- 0-100
-    composite_score NUMERIC(5,2),                         -- weighted combination
-    assumption_scores JSONB DEFAULT '[]',                 -- [{assumption_idx, objective, subjective, combined, status}]
-    key_observations JSONB DEFAULT '[]',                  -- [string]
-    recommendation VARCHAR(20),                           -- 'hold', 'add', 'trim', 'exit'
-    recommendation_reasoning TEXT,
-    created_at TIMESTAMP DEFAULT NOW()
-);
-
--- ============================================
 -- INDEXES
 -- ============================================
 
@@ -362,9 +278,6 @@ CREATE INDEX idx_reports_ticker_type ON analysis_reports(ticker, report_type);
 CREATE INDEX idx_filings_ticker ON sec_filings(ticker, filing_type);
 CREATE INDEX idx_rev_segments_ticker ON revenue_segments(ticker, fiscal_year);
 CREATE INDEX idx_rev_segments_type ON revenue_segments(ticker, segment_type);
-CREATE INDEX idx_theses_ticker ON investment_theses(ticker, status);
-CREATE INDEX idx_thesis_updates_ticker ON thesis_updates(ticker, event_date);
-CREATE INDEX idx_thesis_health_ticker ON thesis_health_checks(ticker, check_date);
 
 -- ============================================
 -- ETL AUDIT

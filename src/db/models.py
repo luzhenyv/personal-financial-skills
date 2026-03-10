@@ -1,6 +1,6 @@
 """SQLAlchemy ORM models matching schema.sql."""
 
-from datetime import date, datetime
+from datetime import datetime
 
 from sqlalchemy import (
     BigInteger,
@@ -52,9 +52,7 @@ class Company(Base):
     daily_prices = relationship("DailyPrice", back_populates="company")
     sec_filings = relationship("SecFiling", back_populates="company")
     analysis_reports = relationship("AnalysisReport", back_populates="company")
-    investment_theses = relationship("InvestmentThesis", back_populates="company")
-    thesis_updates = relationship("ThesisUpdate", back_populates="company")
-    thesis_health_checks = relationship("ThesisHealthCheck", back_populates="company")
+
 
 
 class IncomeStatement(Base):
@@ -294,34 +292,6 @@ class AnalysisReport(Base):
     company = relationship("Company", back_populates="analysis_reports")
 
 
-class PortfolioHolding(Base):
-    __tablename__ = "portfolio_holdings"
-
-    id = Column(Integer, primary_key=True)
-    ticker = Column(String(10), ForeignKey("companies.ticker"), nullable=False)
-    shares = Column(Numeric(12, 4), nullable=False)
-    avg_cost_basis = Column(Numeric(12, 4), nullable=False)
-    purchase_date = Column(Date)
-    notes = Column(Text)
-    is_active = Column(Boolean, default=True)
-    created_at = Column(DateTime, default=datetime.utcnow)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
-
-
-class PortfolioTransaction(Base):
-    __tablename__ = "portfolio_transactions"
-
-    id = Column(Integer, primary_key=True)
-    ticker = Column(String(10), ForeignKey("companies.ticker"), nullable=False)
-    action = Column(String(10), nullable=False)
-    shares = Column(Numeric(12, 4), nullable=False)
-    price = Column(Numeric(12, 4), nullable=False)
-    date = Column(Date, nullable=False)
-    fees = Column(Numeric(8, 2), default=0)
-    notes = Column(Text)
-    created_at = Column(DateTime, default=datetime.utcnow)
-
-
 class Watchlist(Base):
     __tablename__ = "watchlist"
 
@@ -334,81 +304,6 @@ class Watchlist(Base):
     is_active = Column(Boolean, default=True)
 
 
-# ──────────────────────────────────────────────
-# THESIS TRACKER
-# ──────────────────────────────────────────────
-
-
-class InvestmentThesis(Base):
-    __tablename__ = "investment_theses"
-    __table_args__ = (UniqueConstraint("ticker", "status"),)
-
-    id = Column(Integer, primary_key=True)
-    ticker = Column(String(10), ForeignKey("companies.ticker"), nullable=False)
-    position = Column(String(10), nullable=False, default="long")
-    status = Column(String(20), nullable=False, default="active")
-    core_thesis = Column(Text, nullable=False)
-    buy_reasons = Column(JSONB, nullable=False, default=list)
-    assumptions = Column(JSONB, nullable=False, default=list)
-    sell_conditions = Column(JSONB, nullable=False, default=list)
-    risk_factors = Column(JSONB, nullable=False, default=list)
-    target_price = Column(Numeric(12, 4))
-    stop_loss_price = Column(Numeric(12, 4))
-    objective_weight = Column(Numeric(3, 2), nullable=False, default=0.60)
-    subjective_weight = Column(Numeric(3, 2), nullable=False, default=0.40)
-    created_at = Column(DateTime, default=datetime.utcnow)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
-    closed_at = Column(DateTime)
-    close_reason = Column(Text)
-
-    company = relationship("Company", back_populates="investment_theses")
-    updates = relationship(
-        "ThesisUpdate", back_populates="thesis", order_by="ThesisUpdate.event_date"
-    )
-    health_checks = relationship(
-        "ThesisHealthCheck", back_populates="thesis", order_by="ThesisHealthCheck.check_date"
-    )
-
-
-class ThesisUpdate(Base):
-    __tablename__ = "thesis_updates"
-
-    id = Column(Integer, primary_key=True)
-    ticker = Column(String(10), ForeignKey("companies.ticker"), nullable=False)
-    thesis_id = Column(Integer, ForeignKey("investment_theses.id"), nullable=False)
-    event_date = Column(Date, nullable=False)
-    event_title = Column(String(255), nullable=False)
-    event_description = Column(Text)
-    assumption_impacts = Column(JSONB, default=dict)
-    strength_change = Column(String(20), nullable=False, default="unchanged")
-    action_taken = Column(String(20), nullable=False, default="hold")
-    conviction = Column(String(10), nullable=False, default="medium")
-    notes = Column(Text)
-    source = Column(String(50), nullable=False, default="manual")
-    created_at = Column(DateTime, default=datetime.utcnow)
-
-    company = relationship("Company", back_populates="thesis_updates")
-    thesis = relationship("InvestmentThesis", back_populates="updates")
-
-
-class ThesisHealthCheck(Base):
-    __tablename__ = "thesis_health_checks"
-
-    id = Column(Integer, primary_key=True)
-    ticker = Column(String(10), ForeignKey("companies.ticker"), nullable=False)
-    thesis_id = Column(Integer, ForeignKey("investment_theses.id"), nullable=False)
-    check_date = Column(Date, nullable=False, default=date.today)
-    objective_score = Column(Numeric(5, 2))
-    subjective_score = Column(Numeric(5, 2))
-    composite_score = Column(Numeric(5, 2))
-    assumption_scores = Column(JSONB, default=list)
-    key_observations = Column(JSONB, default=list)
-    recommendation = Column(String(20))
-    recommendation_reasoning = Column(Text)
-    created_at = Column(DateTime, default=datetime.utcnow)
-
-    company = relationship("Company", back_populates="thesis_health_checks")
-    thesis = relationship("InvestmentThesis", back_populates="health_checks")
 
 
 # ──────────────────────────────────────────────
