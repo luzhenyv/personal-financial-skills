@@ -1,128 +1,225 @@
 # Personal Financial Skills — Mini Bloomberg
 
-A personal investor toolkit that extracts financial data from SEC EDGAR filings,
-stores it in PostgreSQL, and provides interactive analysis through Streamlit.
+A personal investor toolkit built around three decoupled planes: a **Mini Bloomberg** data engine, an **AI Agent** layer that generates analysis artifacts, and a **Streamlit** dashboard for review.
 
 > Adapted from [financial-services-plugins](https://github.com/anthropics/financial-services-plugins) —
 > institutional-grade skills refactored for personal use.
 
-## Architecture
+---
+
+## System Architecture
+
+The system is organized into three planes that never bleed into each other.
 
 ```
-SEC EDGAR API → XBRL Parser → PostgreSQL
-                                    ↓
-Alpha Vantage → Price Data ──→ PostgreSQL
-                                    ↓
-                          FastAPI (REST + MCP)
-                                    ↓
-                          Streamlit Dashboard
+┌─────────────────────────────────────────────────────────────────┐
+│  PLANE 1 · DATA PLANE  (Mini Bloomberg)                         │
+│  ETL → PostgreSQL + raw/  ← single source of truth for facts   │
+└─────────────────────────────────────────────────────────────────┘
+          ↓  MCP / REST API  (read-only contract)
+┌─────────────────────────────────────────────────────────────────┐
+│  PLANE 2 · INTELLIGENCE PLANE  (Agent + Skills)                 │
+│  Reads MCP → generates analysis artifacts (profile, thesis…)   │
+└─────────────────────────────────────────────────────────────────┘
+          ↓  reads artifacts + API
+┌─────────────────────────────────────────────────────────────────┐
+│  PLANE 3 · PRESENTATION PLANE  (Streamlit)                      │
+│  Renders artifacts and charts — never writes, never triggers ETL│
+└─────────────────────────────────────────────────────────────────┘
 ```
 
-## Quick Start
+**Three hard boundaries:**
+- Streamlit **never writes** — it only reads artifacts and calls the API
+- The Agent **never touches PostgreSQL** — it reads through the MCP contract
+- ETL **never calls the Agent** — data ingestion is a separate, scheduled process
 
-### 1. Start PostgreSQL
+For a detailed walkthrough see [`docs/architecture.md`](docs/architecture.md).
 
-```bash
-cp .env.example .env
-# Edit .env — set SEC_USER_AGENT to your email
+---
 
-docker compose up -d postgres
+## Entry Points
+
+| Entry Point | Purpose |
+|---|---|
+| **Airflow / CLI** | Schedule ETL pipelines, S&P 500 batch ingestion, daily price sync, earnings watch |
+| **Chat UI** | Interact with the Agent — generate profiles, request thesis drafts, ask questions |
+| **REST API** | Direct HTTP calls to trigger ingestion or fetch structured data |
+| **Git** | Version-control all analysis artifacts; edit `.md` / `.json` directly or ask the Agent to patch |
+
+---
+
+## Data Flow
+
+```
+SEC EDGAR ──┐
+yfinance  ──┼──► Mini Bloomberg ETL ──► PostgreSQL (schemas: market_data,
+Alpha Vantage┘    raw/ filesystem              fundamentals, metrics, etl_audit)
+                                                    │
+                                      MCP Server (FastAPI) ◄── read-only
+                                                    │
+                                             Agent + Skills
+                                                    │
+                                         artifacts/{ticker}/
+                                         ├── profile/   (.md + .json)
+                                         ├── thesis/    (v1 → vN .md)
+                                         ├── earnings/  (.md + .json)
+                                         └── news/      (DATE.md)
+                                                    │
+                                           Streamlit Dashboard
 ```
 
-### 2. Install Python Dependencies
+### Data Source Trust Chain
 
-```bash
-uv sync
+When the Agent fetches data, it follows this priority order:
+
+```
+MCP (PostgreSQL) > raw SEC parse > yfinance > Alpha Vantage > web search
 ```
 
-### 3. Ingest a Company
+MCP-sourced data is the most trustworthy — it has already been validated and conflict-resolved during ETL. Raw SEC files are the fallback when structured data is missing. Web search is the last resort.
 
-```python
-from src.etl.pipeline import ingest_company
-
-result = ingest_company("NVDA", years=5)
-print(result)
-```
-
-### 4. Generate a Tearsheet
-
-```python
-from src.analysis.company_profile import generate_tearsheet
-
-md = generate_tearsheet("NVDA")
-print(md)
-```
-
-### 5. Start the API
-
-```bash
-uv run uvicorn src.api.app:app --reload
-# → http://localhost:8000/docs
-```
-
-### 6. Start Streamlit
-
-```bash
-uv run streamlit run streamlit_app/app.py
-# → http://localhost:8501
-```
-
-### Or launch everything with Docker Compose
-
-```bash
-docker compose up -d
-```
+---
 
 ## Skills
 
-Agent-readable skill definitions in `skills/`:
+Agent-readable skill definitions live in `skills/`. Each skill has a single input contract and writes to exactly one artifact path. Skills never call each other directly.
 
-| Skill | Purpose | Status |
-|-------|---------|--------|
-| `company-profile` | 1-page markdown tearsheet | ✅ Ready |
-| `financial-etl` | SEC XBRL → PostgreSQL pipeline | ✅ Ready |
-| `three-statements` | 3-statement financial model | 🔜 Planned |
-| `dcf-valuation` | DCF model with scenarios | 🔜 Planned |
-| `comps-analysis` | Peer comparison | 🔜 Planned |
-| `earnings-analysis` | Post-earnings quick take | 🔜 Planned |
-| `stock-screening` | Filter by financial criteria | 🔜 Planned |
-| `portfolio-monitoring` | Track holdings & P&L | 🔜 Planned |
+| Skill | Input | Output | Status |
+|---|---|---|---|
+| `company-profile` | MCP financials | `artifacts/{t}/profile/YYYY-QN.md+json` | ✅ Ready |
+| `financial-etl` | SEC XBRL | PostgreSQL + `raw/` | ✅ Ready |
+| `investment-thesis` | Profile JSON + user notes | `artifacts/{t}/thesis/vN.md` | 🔜 Planned |
+| `earnings-analysis` | New 10-Q/8-K + prior thesis | `artifacts/{t}/earnings/YYYY-QN.md` | 🔜 Planned |
+| `news-monitor` | Web search results | `artifacts/{t}/news/DATE_slug.md` | 🔜 Planned |
+| `trade-advisor` | Thesis + price + technicals | Advisory text (ephemeral) | 🔜 Planned |
+| `three-statements` | MCP financials | 3-statement model artifact | 🔜 Planned |
+| `dcf-valuation` | 3-statement model | DCF artifact with scenarios | 🔜 Planned |
+| `comps-analysis` | Peer tickers | Comparable company table | 🔜 Planned |
+| `stock-screening` | Filter criteria | Screener results | 🔜 Planned |
+| `portfolio-monitoring` | Holdings + prices | P&L report | 🔜 Planned |
 
-## API Endpoints
+---
+
+## Artifact Store
+
+All agent-generated analysis is stored as git-tracked files under `artifacts/`:
+
+```
+artifacts/
+  NVDA/
+    profile/
+      2025-Q4.md          # markdown tearsheet
+      2025-Q4.json        # structured data (rendered by Streamlit)
+    thesis/
+      v1_2025-11-01.md    # initial draft
+      v2_2025-11-15.md    # after user edits or earnings update
+    earnings/
+      2025-Q4_call.md
+      2025-Q4_call.json
+    news/
+      2025-11-15_antitrust.md
+```
+
+Every JSON artifact includes a `schema_version` field so Streamlit rendering stays stable across schema changes. Users may edit `.md` or `.json` files directly in git, or ask the Agent to apply a patch.
+
+---
+
+## Streamlit Pages
+
+| Page | Data Source |
+|---|---|
+| Company Profile | `artifacts/{ticker}/profile/*.json` + price API |
+| Investment Thesis | `artifacts/{ticker}/thesis/` (versioned) |
+| Earnings Feed | `artifacts/{ticker}/earnings/` timeline |
+| Watchlist | Portfolio holdings + trade signals |
+| Trade Signals | Technicals API (MACD, RSI) |
+| ETL Status | `etl_audit` schema — last run times, gaps |
+
+---
+
+## Quick Start
+
+See [`docs/quickstart.md`](docs/quickstart.md) for full setup. The short version:
+
+```bash
+# 1. Configure environment
+cp .env.example .env          # set SEC_USER_AGENT to your email
+
+# 2. Start PostgreSQL
+docker compose up -d postgres
+
+# 3. Install dependencies
+uv sync
+
+# 4. Ingest a company
+uv run python -m src.etl.pipeline ingest NVDA --years 5
+
+# 5. Start API + Streamlit
+docker compose up -d          # → http://localhost:8000/docs
+                              # → http://localhost:8501
+```
+
+---
+
+## API Reference
+
+See [`docs/api.md`](docs/api.md) for full endpoint documentation.
 
 | Method | Path | Description |
-|--------|------|-------------|
-| GET | `/api/companies/` | List all companies |
-| POST | `/api/companies/ingest` | Trigger ETL for a ticker |
-| GET | `/api/financials/{ticker}/income-statements` | Income statements |
-| GET | `/api/financials/{ticker}/balance-sheets` | Balance sheets |
-| GET | `/api/financials/{ticker}/cash-flows` | Cash flow statements |
-| GET | `/api/financials/{ticker}/metrics` | Computed metrics |
-| GET | `/api/financials/{ticker}/prices` | Price data |
-| GET | `/api/analysis/{ticker}/profile` | Structured profile (JSON) |
-| POST | `/api/analysis/{ticker}/tearsheet` | Generate tearsheet |
-| GET | `/api/analysis/{ticker}/tearsheet` | Get saved tearsheet |
+|---|---|---|
+| `POST` | `/api/companies/ingest` | Trigger ETL for a ticker |
+| `GET` | `/api/companies/` | List all ingested companies |
+| `GET` | `/api/financials/{ticker}/income-statements` | Income statements |
+| `GET` | `/api/financials/{ticker}/balance-sheets` | Balance sheets |
+| `GET` | `/api/financials/{ticker}/cash-flows` | Cash flow statements |
+| `GET` | `/api/financials/{ticker}/metrics` | Computed metrics (P/E, EV/EBITDA…) |
+| `GET` | `/api/financials/{ticker}/prices` | Price history |
+| `GET` | `/api/analysis/{ticker}/profile` | Structured profile (JSON) |
+| `POST` | `/api/analysis/{ticker}/tearsheet` | Generate tearsheet via Agent |
+| `GET` | `/api/analysis/{ticker}/tearsheet` | Get saved tearsheet |
+
+---
 
 ## Tech Stack
 
 | Component | Technology |
-|-----------|-----------|
+|---|---|
 | Database | PostgreSQL 16 (Docker) |
 | ETL | Python + httpx + SEC EDGAR XBRL API |
-| Backend | FastAPI |
+| Validation | yfinance |
+| Conflict resolution | Alpha Vantage API |
+| Backend / MCP | FastAPI |
+| Agent | Claude + Skills (Markdown) |
 | Dashboard | Streamlit + Plotly |
-| Agent Interface | Skills (Markdown) + MCP (planned) |
+| Artifact versioning | Git |
 | Scheduling | Airflow (planned) |
+
+---
 
 ## Cost
 
 | Item | Cost |
-|------|------|
+|---|---|
 | SEC EDGAR API | Free |
+| yfinance | Free |
 | Alpha Vantage (optional) | $0–50/mo |
 | PostgreSQL (Docker) | Free |
-| Total | ~$0–50/mo |
+| **Total** | **~$0–50/mo** |
+
+---
+
+## Documentation
+
+| Doc | Contents |
+|---|---|
+| [`docs/architecture.md`](docs/architecture.md) | Full system design, decoupling rules, data plane details |
+| [`docs/quickstart.md`](docs/quickstart.md) | Step-by-step setup and first ingest |
+| [`docs/api.md`](docs/api.md) | Full API endpoint reference |
+| [`docs/artifact-schema.md`](docs/artifact-schema.md) | JSON schema for each artifact type |
+| [`docs/skills.md`](docs/skills.md) | How to write and extend skills |
+
+---
 
 ## License
 
-MIT
+Apache-2.0
