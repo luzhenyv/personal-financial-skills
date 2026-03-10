@@ -36,6 +36,8 @@ class Company(Base):
     exchange = Column(String(20))
     fiscal_year_end = Column(String(5))
     market_cap = Column(BigInteger)
+    employee_count = Column(Integer)
+    headquarters = Column(String(255))
     description = Column(Text)
     website = Column(String(500))
     created_at = Column(DateTime, default=datetime.utcnow)
@@ -45,6 +47,7 @@ class Company(Base):
     income_statements = relationship("IncomeStatement", back_populates="company")
     balance_sheets = relationship("BalanceSheet", back_populates="company")
     cash_flow_statements = relationship("CashFlowStatement", back_populates="company")
+    revenue_segments = relationship("RevenueSegment", back_populates="company")
     financial_metrics = relationship("FinancialMetric", back_populates="company")
     daily_prices = relationship("DailyPrice", back_populates="company")
     sec_filings = relationship("SecFiling", back_populates="company")
@@ -71,6 +74,7 @@ class IncomeStatement(Base):
     # Operating
     research_and_development = Column(BigInteger)
     selling_general_admin = Column(BigInteger)
+    depreciation_amortization = Column(BigInteger)
     operating_expenses = Column(BigInteger)
     operating_income = Column(BigInteger)
     # Below the line
@@ -115,6 +119,7 @@ class BalanceSheet(Base):
     total_assets = Column(BigInteger)
     # Liabilities
     accounts_payable = Column(BigInteger)
+    deferred_revenue = Column(BigInteger)
     short_term_debt = Column(BigInteger)
     total_current_liabilities = Column(BigInteger)
     long_term_debt = Column(BigInteger)
@@ -170,6 +175,29 @@ class CashFlowStatement(Base):
     company = relationship("Company", back_populates="cash_flow_statements")
 
 
+class RevenueSegment(Base):
+    __tablename__ = "revenue_segments"
+    __table_args__ = (
+        UniqueConstraint(
+            "ticker", "fiscal_year", "fiscal_quarter", "segment_type", "segment_name"
+        ),
+    )
+
+    id = Column(Integer, primary_key=True)
+    ticker = Column(String(10), ForeignKey("companies.ticker"), nullable=False)
+    fiscal_year = Column(Integer, nullable=False)
+    fiscal_quarter = Column(Integer)
+    segment_type = Column(String(20), nullable=False)  # 'product', 'geography', 'channel'
+    segment_name = Column(String(255), nullable=False)
+    revenue = Column(BigInteger)
+    pct_of_total = Column(Numeric(8, 4))
+    source = Column(String(50), default="sec_xbrl")
+    raw_json = Column(JSONB)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    company = relationship("Company", back_populates="revenue_segments")
+
+
 class FinancialMetric(Base):
     __tablename__ = "financial_metrics"
     __table_args__ = (UniqueConstraint("ticker", "fiscal_year", "fiscal_quarter"),)
@@ -181,6 +209,7 @@ class FinancialMetric(Base):
     # Margins
     gross_margin = Column(Numeric(8, 4))
     operating_margin = Column(Numeric(8, 4))
+    ebitda_margin = Column(Numeric(8, 4))
     net_margin = Column(Numeric(8, 4))
     fcf_margin = Column(Numeric(8, 4))
     # Growth
@@ -196,7 +225,12 @@ class FinancialMetric(Base):
     debt_to_equity = Column(Numeric(8, 4))
     current_ratio = Column(Numeric(8, 4))
     quick_ratio = Column(Numeric(8, 4))
+    # Efficiency
+    dso = Column(Numeric(8, 2))
+    dio = Column(Numeric(8, 2))
+    dpo = Column(Numeric(8, 2))
     # Valuation
+    ebitda = Column(BigInteger)
     pe_ratio = Column(Numeric(8, 2))
     ps_ratio = Column(Numeric(8, 2))
     pb_ratio = Column(Numeric(8, 2))

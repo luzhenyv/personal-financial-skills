@@ -17,6 +17,8 @@ CREATE TABLE companies (
     exchange VARCHAR(20),
     fiscal_year_end VARCHAR(5),
     market_cap BIGINT,
+    employee_count INT,
+    headquarters VARCHAR(255),
     description TEXT,
     website VARCHAR(500),
     created_at TIMESTAMP DEFAULT NOW(),
@@ -41,6 +43,7 @@ CREATE TABLE income_statements (
     -- Operating
     research_and_development BIGINT,
     selling_general_admin BIGINT,
+    depreciation_amortization BIGINT,
     operating_expenses BIGINT,
     operating_income BIGINT,
     -- Below the line
@@ -81,6 +84,7 @@ CREATE TABLE balance_sheets (
     total_assets BIGINT,
     -- Liabilities
     accounts_payable BIGINT,
+    deferred_revenue BIGINT,
     short_term_debt BIGINT,
     total_current_liabilities BIGINT,
     long_term_debt BIGINT,
@@ -143,6 +147,7 @@ CREATE TABLE financial_metrics (
     -- Margins
     gross_margin NUMERIC(8,4),
     operating_margin NUMERIC(8,4),
+    ebitda_margin NUMERIC(8,4),
     net_margin NUMERIC(8,4),
     fcf_margin NUMERIC(8,4),
     -- Growth (YoY)
@@ -158,7 +163,12 @@ CREATE TABLE financial_metrics (
     debt_to_equity NUMERIC(8,4),
     current_ratio NUMERIC(8,4),
     quick_ratio NUMERIC(8,4),
+    -- Efficiency
+    dso NUMERIC(8,2),                                     -- days sales outstanding
+    dio NUMERIC(8,2),                                     -- days inventory outstanding
+    dpo NUMERIC(8,2),                                     -- days payable outstanding
     -- Valuation (requires price data)
+    ebitda BIGINT,
     pe_ratio NUMERIC(8,2),
     ps_ratio NUMERIC(8,2),
     pb_ratio NUMERIC(8,2),
@@ -167,6 +177,25 @@ CREATE TABLE financial_metrics (
     --
     calculated_at TIMESTAMP DEFAULT NOW(),
     UNIQUE(ticker, fiscal_year, fiscal_quarter)
+);
+
+-- ============================================
+-- REVENUE SEGMENTS
+-- ============================================
+
+CREATE TABLE revenue_segments (
+    id SERIAL PRIMARY KEY,
+    ticker VARCHAR(10) NOT NULL REFERENCES companies(ticker),
+    fiscal_year INT NOT NULL,
+    fiscal_quarter INT,
+    segment_type VARCHAR(20) NOT NULL,                    -- 'product', 'geography', 'channel'
+    segment_name VARCHAR(255) NOT NULL,
+    revenue BIGINT,
+    pct_of_total NUMERIC(8,4),
+    source VARCHAR(50) DEFAULT 'sec_xbrl',
+    raw_json JSONB,
+    created_at TIMESTAMP DEFAULT NOW(),
+    UNIQUE(ticker, fiscal_year, fiscal_quarter, segment_type, segment_name)
 );
 
 -- ============================================
@@ -331,6 +360,8 @@ CREATE INDEX idx_metrics_ticker_year ON financial_metrics(ticker, fiscal_year);
 CREATE INDEX idx_prices_ticker_date ON daily_prices(ticker, date);
 CREATE INDEX idx_reports_ticker_type ON analysis_reports(ticker, report_type);
 CREATE INDEX idx_filings_ticker ON sec_filings(ticker, filing_type);
+CREATE INDEX idx_rev_segments_ticker ON revenue_segments(ticker, fiscal_year);
+CREATE INDEX idx_rev_segments_type ON revenue_segments(ticker, segment_type);
 CREATE INDEX idx_theses_ticker ON investment_theses(ticker, status);
 CREATE INDEX idx_thesis_updates_ticker ON thesis_updates(ticker, event_date);
 CREATE INDEX idx_thesis_health_ticker ON thesis_health_checks(ticker, check_date);
