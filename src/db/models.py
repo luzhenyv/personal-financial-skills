@@ -409,3 +409,29 @@ class ThesisHealthCheck(Base):
 
     company = relationship("Company", back_populates="thesis_health_checks")
     thesis = relationship("InvestmentThesis", back_populates="health_checks")
+
+
+# ──────────────────────────────────────────────
+# ETL AUDIT
+# ──────────────────────────────────────────────
+
+
+class EtlRun(Base):
+    __tablename__ = "etl_runs"
+
+    id = Column(Integer, primary_key=True)
+    ticker = Column(String(10), nullable=False)
+    run_type = Column(String(30), nullable=False)
+    status = Column(String(20), nullable=False, default="running")
+    started_at = Column(DateTime, nullable=False, default=datetime.utcnow)
+    completed_at = Column(DateTime)
+    income_statements = Column(Integer, default=0)
+    balance_sheets = Column(Integer, default=0)
+    cash_flow_statements = Column(Integer, default=0)
+    financial_metrics = Column(Integer, default=0)
+    revenue_segments = Column(Integer, default=0)
+    daily_prices = Column(Integer, default=0)
+    sec_filings = Column(Integer, default=0)
+    filings_downloaded = Column(Integer, default=0)
+    errors = Column(JSONB, default=list)
+    run_metadata = Column("metadata", JSONB, default=dict)

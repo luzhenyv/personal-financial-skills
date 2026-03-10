@@ -2,10 +2,14 @@
 
 Parses the SEC XBRL companyfacts JSON into structured financial statement rows.
 Maps XBRL US-GAAP taxonomy tags to our database schema fields.
+
+Includes:
+- Income statement, balance sheet, cash flow parsing
+- Revenue segment extraction (product / geography)
+- Derived metric computation (margins, growth, returns, efficiency, valuation)
 """
 
 import logging
-from datetime import date
 from typing import Any
 
 logger = logging.getLogger(__name__)
@@ -220,10 +224,33 @@ CASH_FLOW_TAGS: dict[str, list[str]] = {
     ],
 }
 
-# EPS tags use different units (USD/shares instead of USD)
-EPS_FIELDS = {"eps_basic", "eps_diluted"}
-PER_SHARE_FIELDS = EPS_FIELDS
+# Revenue segment tags (product and geography breakdowns)
+SEGMENT_REVENUE_TAGS: list[str] = [
+    "RevenueFromContractWithCustomerExcludingAssessedTax",
+    "Revenues",
+    "RevenueFromContractWithCustomerIncludingAssessedTax",
+    "SalesRevenueNet",
+]
 
+# Known segment dimension axes in XBRL
+PRODUCT_SEGMENT_AXES = [
+    "srt:ProductOrServiceAxis",
+    "us-gaap:ProductOrServiceAxis",
+    "us-gaap:StatementBusinessSegmentsAxis",
+]
+
+GEOGRAPHY_SEGMENT_AXES = [
+    "srt:StatementGeographicalAxis",
+    "us-gaap:StatementGeographicalAxis",
+]
+
+# Fields that use USD/shares units
+EPS_FIELDS = {"eps_basic", "eps_diluted"}
+
+
+# ──────────────────────────────────────────────
+# Value Extraction Helpers
+# ──────────────────────────────────────────────
 
 def _extract_fact_values(
     facts: dict[str, Any],
@@ -231,10 +258,7 @@ def _extract_fact_values(
     unit_key: str = "USD",
     min_year: int = 2020,
 ) -> list[dict]:
-    """Extract values for a single XBRL tag, filtered to recent fiscal years.
-
-    Returns list of dicts with keys: fy, fp, val, end, filed, form
-    """
+    """Extract values for a single XBRL tag, filtered to recent fiscal years."""
     us_gaap = facts.get("facts", {}).get("us-gaap", {})
     tag_data = us_gaap.get(tag, {})
     if not tag_data:
@@ -243,7 +267,6 @@ def _extract_fact_values(
     units = tag_data.get("units", {})
     values = units.get(unit_key, [])
     if not values:
-        # Try alternate unit keys
         for alt_key in ["USD/shares", "shares", "pure"]:
             if alt_key in units:
                 values = units[alt_key]
@@ -257,27 +280,14 @@ def _extract_fact_values(
 
         result.append({
             "fy": fy,
-            "fp": item.get("fp", ""),        # FY, Q1, Q2, Q3, Q4
+            "fp": item.get("fp", ""),
             "val": item.get("val"),
-            "end": item.get("end", ""),       # Period end date
-            "filed": item.get("filed", ""),   # Filing date
-            "form": item.get("form", ""),     # 10-K, 10-Q
+            "end": item.get("end", ""),
+            "filed": item.get("filed", ""),
+            "form": item.get("form", ""),
         })
 
     return result
-
-
-def _resolve_tag(
-    facts: dict, field_name: str, tag_candidates: list[str], unit_key: str, min_year: int
-) -> list[dict]:
-    """Try each candidate tag until we find data."""
-    for tag in tag_candidates:
-        values = _extract_fact_values(facts, tag, unit_key, min_year)
-        if values:
-            logger.debug(f"  {field_name} → {tag} ({len(values)} values)")
-            return values
-    logger.debug(f"  {field_name} → NO DATA (tried {len(tag_candidates)} tags)")
-    return []
 
 
 def _resolve_tag_for_year(
@@ -288,12 +298,10 @@ def _resolve_tag_for_year(
     min_year: int,
     fiscal_year: int,
     quarter: int | None = None,
-) -> tuple[list[dict], any]:
+) -> tuple[list[dict], Any]:
     """Try each candidate tag until we find data for the specific target year.
 
-    Unlike _resolve_tag which returns the first tag with ANY data,
-    this function falls through to the next tag if no value is found
-    for the target fiscal year/quarter.
+    Falls through to the next tag if no value is found for the target period.
     """
     picker = _pick_quarterly if quarter else _pick_annual
     pick_args = (fiscal_year, quarter) if quarter else (fiscal_year,)
@@ -307,7 +315,9 @@ def _resolve_tag_for_year(
             logger.debug(f"  {field_name} → {tag} = {val} (FY{fiscal_year})")
             return values, val
 
-    logger.debug(f"  {field_name} → NO DATA for FY{fiscal_year} (tried {len(tag_candidates)} tags)")
+    logger.debug(
+        f"  {field_name} → NO DATA for FY{fiscal_year} (tried {len(tag_candidates)} tags)"
+    )
     return [], None
 
 
@@ -315,10 +325,6 @@ def _pick_annual(values: list[dict], fiscal_year: int) -> int | float | None:
     """Pick the best annual value for a fiscal year.
 
     Prefer: form='10-K', fp='FY', latest period end date, most recent filing.
-
-    10-K filings include comparison years (e.g., FY2025 10-K reports
-    FY2023, FY2024, FY2025 data — all tagged with fy=2025). We use
-    the period 'end' date to pick the correct (most recent period) entry.
     """
     candidates = [v for v in values if v["fy"] == fiscal_year]
     if not candidates:
@@ -334,8 +340,7 @@ def _pick_annual(values: list[dict], fiscal_year: int) -> int | float | None:
     if fy_vals:
         candidates = fy_vals
 
-    # Pick the latest period end date (to get the current year's data,
-    # not prior-year comparisons reported in the same filing)
+    # Pick the latest period end date (current year's data, not prior-year comparisons)
     candidates.sort(key=lambda x: (x.get("end", ""), x.get("filed", "")), reverse=True)
     return candidates[0]["val"]
 
@@ -347,7 +352,6 @@ def _pick_quarterly(values: list[dict], fiscal_year: int, quarter: int) -> int |
     if not candidates:
         return None
 
-    # Prefer 10-Q filings
     q_filings = [c for c in candidates if c["form"] == "10-Q"]
     if q_filings:
         candidates = q_filings
@@ -378,7 +382,7 @@ def parse_income_statement(
 
         result[field] = val
         if values:
-            raw_values[field] = {"tag": tags[0], "values": values[-3:]}  # Keep last 3 for audit
+            raw_values[field] = {"tag": tags[0], "values": values[-3:]}
 
     result["raw_json"] = raw_values
     return result
@@ -422,7 +426,6 @@ def parse_cash_flow(
     cfo = result.get("cash_from_operations")
     capex = result.get("capital_expenditure")
     if cfo is not None and capex is not None:
-        # CapEx is reported as a positive number (payment) — FCF = CFO - CapEx
         result["free_cash_flow"] = cfo - abs(capex)
 
     result["raw_json"] = raw_values
@@ -438,7 +441,6 @@ def get_available_fiscal_years(facts: dict[str, Any], min_year: int = 2020) -> l
     us_gaap = facts.get("facts", {}).get("us-gaap", {})
     all_years: set[int] = set()
 
-    # Check ALL revenue tags and merge years (companies switch tags over time)
     for tag in INCOME_STATEMENT_TAGS["revenue"]:
         tag_data = us_gaap.get(tag, {})
         units = tag_data.get("units", {}).get("USD", [])
@@ -451,39 +453,174 @@ def get_available_fiscal_years(facts: dict[str, Any], min_year: int = 2020) -> l
     return sorted(all_years)
 
 
+# ──────────────────────────────────────────────
+# Revenue Segment Parsing
+# ──────────────────────────────────────────────
+
+def parse_revenue_segments(
+    facts: dict[str, Any], fiscal_year: int, quarter: int | None = None
+) -> list[dict[str, Any]]:
+    """Parse revenue segment breakdowns (product and geography) from XBRL facts.
+
+    Returns a list of dicts: {segment_type, segment_name, revenue, pct_of_total}
+
+    Segment data in XBRL is encoded via dimensional qualifiers on revenue tags.
+    Not all companies report segment data through XBRL; many only include it
+    in the 10-K HTML narrative (Item 7 MD&A).
+    """
+    us_gaap = facts.get("facts", {}).get("us-gaap", {})
+    segments: list[dict[str, Any]] = []
+
+    # Look for segment-qualified revenue data
+    for tag in SEGMENT_REVENUE_TAGS:
+        tag_data = us_gaap.get(tag, {})
+        if not tag_data:
+            continue
+
+        # Check for dimensional data (segments appear as separate sub-entries)
+        units = tag_data.get("units", {}).get("USD", [])
+        segment_values: dict[str, int | float] = {}
+
+        for item in units:
+            fy = item.get("fy", 0)
+            fp = item.get("fp", "")
+            form = item.get("form", "")
+
+            # Match the target period
+            if quarter:
+                if fy != fiscal_year or fp != f"Q{quarter}":
+                    continue
+            else:
+                if fy != fiscal_year or fp != "FY":
+                    continue
+
+            # Items with segment dimension info have a "frame" or are
+            # structured differently. In practice, the SEC companyfacts
+            # endpoint flattens segment data into the same arrays.
+            # We look for entries that have a segment member in their accn.
+            val = item.get("val")
+            if val is not None:
+                # The base (unsegmented) entry typically has the largest value
+                # or is the only one with form="10-K"
+                end = item.get("end", "")
+                key = f"{end}_{form}"
+                if key not in segment_values:
+                    segment_values[key] = val
+
+        # If we found data under this tag, we got the aggregate; break
+        if segment_values:
+            break
+
+    # Try to find explicit segment reporting tags
+    segment_specific_tags = [
+        "RevenueFromExternalCustomersByGeographicAreasTableTextBlock",
+        "ScheduleOfRevenueByMajorCustomersByReportingSegmentsTableTextBlock",
+    ]
+
+    # Look for product/service segment revenue in explicitly segmented tags
+    product_segments = _extract_segment_dimension(
+        facts, fiscal_year, quarter, "product"
+    )
+    geo_segments = _extract_segment_dimension(
+        facts, fiscal_year, quarter, "geography"
+    )
+
+    segments.extend(product_segments)
+    segments.extend(geo_segments)
+
+    # Compute pct_of_total if we have segment data
+    total_rev = sum(s["revenue"] for s in segments if s["revenue"]) or None
+    if total_rev:
+        for s in segments:
+            if s["revenue"]:
+                s["pct_of_total"] = round(s["revenue"] / total_rev, 4)
+
+    return segments
+
+
+def _extract_segment_dimension(
+    facts: dict[str, Any],
+    fiscal_year: int,
+    quarter: int | None,
+    segment_type: str,
+) -> list[dict[str, Any]]:
+    """Extract segment data from XBRL facts using dimension axes.
+
+    This handles the case where segment data is reported as separate XBRL
+    facts with segment dimension qualifiers. The SEC companyfacts endpoint
+    may not always include these; they're more reliably found in XBRL
+    instance documents.
+    """
+    # For companyfacts JSON, segment data is not reliably separated.
+    # Return empty — the skill script extracts segments from 10-K HTML (MD&A) instead.
+    # This is a placeholder for future XBRL instance document parsing.
+    return []
+
+
+# ──────────────────────────────────────────────
+# Derived Metrics Computation
+# ──────────────────────────────────────────────
+
+def _safe_div(numerator: float | None, denominator: float | None) -> float | None:
+    """Safe division returning None if either value is None or denominator is zero."""
+    if numerator is None or denominator is None or denominator == 0:
+        return None
+    return numerator / denominator
+
+
 def compute_metrics(
-    income: dict, balance: dict, cash_flow: dict,
-    prev_income: dict | None = None, prev_balance: dict | None = None,
+    income: dict,
+    balance: dict,
+    cash_flow: dict,
+    prev_income: dict | None = None,
+    prev_balance: dict | None = None,
+    market_data: dict | None = None,
 ) -> dict[str, float | None]:
-    """Compute derived financial metrics from the three statements."""
+    """Compute derived financial metrics from the three statements.
+
+    Args:
+        income: Parsed income statement dict
+        balance: Parsed balance sheet dict
+        cash_flow: Parsed cash flow dict
+        prev_income: Prior year income statement (for growth calcs)
+        prev_balance: Prior year balance sheet (unused currently, reserved)
+        market_data: Optional dict with 'price', 'market_cap', 'shares_outstanding'
+                     for computing valuation metrics (PE, PS, PB, EV/EBITDA, FCF yield)
+    """
     metrics: dict[str, float | None] = {}
 
     rev = income.get("revenue")
     oi = income.get("operating_income")
     ni = income.get("net_income")
     gp = income.get("gross_profit")
+    cogs = income.get("cost_of_revenue")
     fcf = cash_flow.get("free_cash_flow")
+    da = cash_flow.get("depreciation_amortization")
     ta = balance.get("total_assets")
     eq = balance.get("total_stockholders_equity")
     cl = balance.get("total_current_liabilities")
     ca = balance.get("total_current_assets")
     inv = balance.get("inventory")
+    ar = balance.get("accounts_receivable")
+    ap = balance.get("accounts_payable")
     ltd = balance.get("long_term_debt") or 0
     std = balance.get("short_term_debt") or 0
+    cash = balance.get("cash_and_equivalents") or 0
 
-    # Margins
-    if rev and rev != 0:
-        metrics["gross_margin"] = round(gp / rev, 4) if gp else None
-        metrics["operating_margin"] = round(oi / rev, 4) if oi else None
-        metrics["net_margin"] = round(ni / rev, 4) if ni else None
-        metrics["fcf_margin"] = round(fcf / rev, 4) if fcf else None
-    else:
-        metrics["gross_margin"] = None
-        metrics["operating_margin"] = None
-        metrics["net_margin"] = None
-        metrics["fcf_margin"] = None
+    # ── EBITDA ──
+    ebitda = None
+    if oi is not None and da is not None:
+        ebitda = oi + abs(da)
+    metrics["ebitda"] = ebitda
 
-    # Growth (YoY)
+    # ── Margins ──
+    metrics["gross_margin"] = round(_safe_div(gp, rev), 4) if _safe_div(gp, rev) is not None else None
+    metrics["operating_margin"] = round(_safe_div(oi, rev), 4) if _safe_div(oi, rev) is not None else None
+    metrics["ebitda_margin"] = round(_safe_div(ebitda, rev), 4) if _safe_div(ebitda, rev) is not None else None
+    metrics["net_margin"] = round(_safe_div(ni, rev), 4) if _safe_div(ni, rev) is not None else None
+    metrics["fcf_margin"] = round(_safe_div(fcf, rev), 4) if _safe_div(fcf, rev) is not None else None
+
+    # ── Growth (YoY) ──
     if prev_income:
         prev_rev = prev_income.get("revenue")
         prev_oi = prev_income.get("operating_income")
@@ -513,36 +650,96 @@ def compute_metrics(
         metrics["net_income_growth"] = None
         metrics["eps_growth"] = None
 
-    # Returns
-    if ni and eq and eq != 0:
-        metrics["roe"] = round(ni / eq, 4)
-    else:
-        metrics["roe"] = None
-
-    if ni and ta and ta != 0:
-        metrics["roa"] = round(ni / ta, 4)
-    else:
-        metrics["roa"] = None
+    # ── Returns ──
+    metrics["roe"] = round(_safe_div(ni, eq), 4) if _safe_div(ni, eq) is not None else None
+    metrics["roa"] = round(_safe_div(ni, ta), 4) if _safe_div(ni, ta) is not None else None
 
     # ROIC = NOPAT / Invested Capital
-    # Simplified: NOPAT ≈ OI * (1 - tax_rate), IC ≈ Equity + Debt - Cash
     tax = income.get("income_tax")
     pretax = income.get("pretax_income")
     if oi and pretax and pretax != 0 and tax is not None:
         tax_rate = abs(tax) / abs(pretax) if pretax != 0 else 0.25
         nopat = oi * (1 - tax_rate)
-        cash = balance.get("cash_and_equivalents") or 0
         invested_capital = (eq or 0) + ltd + std - cash
-        metrics["roic"] = round(nopat / invested_capital, 4) if invested_capital != 0 else None
+        metrics["roic"] = (
+            round(nopat / invested_capital, 4) if invested_capital != 0 else None
+        )
     else:
         metrics["roic"] = None
 
-    # Leverage
+    # ── Leverage ──
     total_debt = ltd + std
-    metrics["debt_to_equity"] = round(total_debt / eq, 4) if eq and eq != 0 else None
-    metrics["current_ratio"] = round(ca / cl, 4) if ca and cl and cl != 0 else None
+    metrics["debt_to_equity"] = (
+        round(total_debt / eq, 4) if eq and eq != 0 else None
+    )
+    metrics["current_ratio"] = (
+        round(ca / cl, 4) if ca and cl and cl != 0 else None
+    )
     metrics["quick_ratio"] = (
         round((ca - (inv or 0)) / cl, 4) if ca and cl and cl != 0 else None
     )
+
+    # ── Efficiency (working capital) ──
+    # DSO = (Accounts Receivable / Revenue) × 365
+    metrics["dso"] = (
+        round(ar / rev * 365, 2) if ar and rev and rev != 0 else None
+    )
+
+    # DIO = (Inventory / COGS) × 365
+    metrics["dio"] = (
+        round(inv / cogs * 365, 2)
+        if inv and cogs and cogs != 0 else None
+    )
+
+    # DPO = (Accounts Payable / COGS) × 365
+    metrics["dpo"] = (
+        round(ap / cogs * 365, 2)
+        if ap and cogs and cogs != 0 else None
+    )
+
+    # ── Valuation (requires market data) ──
+    if market_data:
+        price = market_data.get("price")
+        mkt_cap = market_data.get("market_cap")
+        shares = market_data.get("shares_outstanding")
+
+        eps_diluted = income.get("eps_diluted")
+
+        # PE ratio
+        metrics["pe_ratio"] = (
+            round(float(price) / float(eps_diluted), 2)
+            if price and eps_diluted and float(eps_diluted) != 0 else None
+        )
+
+        # PS ratio
+        metrics["ps_ratio"] = (
+            round(mkt_cap / rev, 2)
+            if mkt_cap and rev and rev != 0 else None
+        )
+
+        # PB ratio
+        metrics["pb_ratio"] = (
+            round(mkt_cap / eq, 2)
+            if mkt_cap and eq and eq != 0 else None
+        )
+
+        # EV/EBITDA
+        if mkt_cap and ebitda and ebitda != 0:
+            ev = mkt_cap + total_debt - cash
+            metrics["ev_to_ebitda"] = round(ev / ebitda, 2)
+        else:
+            metrics["ev_to_ebitda"] = None
+
+        # FCF yield
+        metrics["fcf_yield"] = (
+            round(fcf / mkt_cap, 4)
+            if fcf and mkt_cap and mkt_cap != 0 else None
+        )
+    else:
+        metrics["pe_ratio"] = None
+        metrics["ps_ratio"] = None
+        metrics["pb_ratio"] = None
+        metrics["ev_to_ebitda"] = None
+        metrics["fcf_yield"] = None
 
     return metrics

@@ -365,3 +365,28 @@ CREATE INDEX idx_rev_segments_type ON revenue_segments(ticker, segment_type);
 CREATE INDEX idx_theses_ticker ON investment_theses(ticker, status);
 CREATE INDEX idx_thesis_updates_ticker ON thesis_updates(ticker, event_date);
 CREATE INDEX idx_thesis_health_ticker ON thesis_health_checks(ticker, check_date);
+
+-- ============================================
+-- ETL AUDIT
+-- ============================================
+
+CREATE TABLE etl_runs (
+    id SERIAL PRIMARY KEY,
+    ticker VARCHAR(10) NOT NULL,
+    run_type VARCHAR(30) NOT NULL,                        -- 'full_ingest', 'price_sync', 'filing_download'
+    status VARCHAR(20) NOT NULL DEFAULT 'running',        -- 'running', 'success', 'partial', 'failed'
+    started_at TIMESTAMP NOT NULL DEFAULT NOW(),
+    completed_at TIMESTAMP,
+    income_statements INT DEFAULT 0,
+    balance_sheets INT DEFAULT 0,
+    cash_flow_statements INT DEFAULT 0,
+    financial_metrics INT DEFAULT 0,
+    revenue_segments INT DEFAULT 0,
+    daily_prices INT DEFAULT 0,
+    sec_filings INT DEFAULT 0,
+    filings_downloaded INT DEFAULT 0,
+    errors JSONB DEFAULT '[]',
+    metadata JSONB DEFAULT '{}'
+);
+
+CREATE INDEX idx_etl_runs_ticker ON etl_runs(ticker, started_at);

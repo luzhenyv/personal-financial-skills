@@ -1,15 +1,18 @@
-"""Yahoo Finance client — supplement SEC data with market data.
+"""Yahoo Finance client — primary market data source.
 
 Uses the yfinance library for:
+- Daily OHLCV price data (primary price source, replaces Alpha Vantage)
 - Real-time / delayed quotes
 - Sector and industry classification
+- Stock split history
+- Key financials (for cross-validation against SEC XBRL)
 - Peer company discovery
-- Historical price data (as backup to Alpha Vantage)
 
 Free, no API key required. Rate limits are lenient.
 """
 
 import logging
+from datetime import date
 from typing import Any
 
 logger = logging.getLogger(__name__)
@@ -58,6 +61,7 @@ def get_stock_info(ticker: str) -> dict[str, Any]:
             "employees": info.get("fullTimeEmployees"),
             "country": info.get("country", ""),
             "exchange": info.get("exchange", ""),
+            "shares_outstanding": info.get("sharesOutstanding"),
         }
     except Exception as e:
         logger.error(f"yfinance error for {ticker}: {e}")
@@ -80,23 +84,163 @@ def get_current_price(ticker: str) -> float | None:
         return None
 
 
-def get_peers(ticker: str, n: int = 10) -> list[str]:
-    """Discover peer companies in the same sector/industry.
+def get_daily_prices(
+    ticker: str, period: str = "5y"
+) -> list[dict[str, Any]]:
+    """Fetch daily adjusted OHLCV prices from Yahoo Finance.
 
-    Uses Yahoo Finance's recommended tickers and sector data.
+    This is the primary price data source for the ETL pipeline.
+
+    Args:
+        ticker: Stock symbol (e.g. 'NVDA')
+        period: Data period — '1y', '2y', '5y', '10y', 'max', etc.
+
+    Returns:
+        List of price records matching DailyPrice model fields,
+        sorted by date descending.
+    """
+    if not _HAS_YFINANCE:
+        logger.warning("yfinance not installed — skipping price fetch")
+        return []
+
+    try:
+        stock = yf.Ticker(ticker.upper())
+        hist = stock.history(period=period, interval="1d", auto_adjust=False)
+
+        if hist.empty:
+            logger.warning(f"No price data from yfinance for {ticker}")
+            return []
+
+        records = []
+        for date_idx, row in hist.iterrows():
+            records.append({
+                "ticker": ticker.upper(),
+                "date": str(date_idx.date()),
+                "open_price": float(row["Open"]),
+                "high_price": float(row["High"]),
+                "low_price": float(row["Low"]),
+                "close_price": float(row["Close"]),
+                "adjusted_close": float(row.get("Adj Close", row["Close"])),
+                "volume": int(row["Volume"]),
+            })
+
+        # Sort by date descending (most recent first)
+        records.sort(key=lambda x: x["date"], reverse=True)
+        logger.info(f"Got {len(records)} price records for {ticker} from yfinance")
+        return records
+
+    except Exception as e:
+        logger.error(f"yfinance daily prices error for {ticker}: {e}")
+        return []
+
+
+def get_stock_splits(ticker: str) -> list[dict[str, Any]]:
+    """Fetch stock split history from Yahoo Finance.
+
+    Returns:
+        List of {date: "YYYY-MM-DD", ratio: float} dicts, sorted by date ascending.
+        The ratio is the split multiplier (e.g. 10.0 for a 10:1 split).
     """
     if not _HAS_YFINANCE:
         return []
 
     try:
         stock = yf.Ticker(ticker.upper())
-        # yfinance has a recommendations attribute on some tickers
-        # but more reliably we can check the sector
+        splits = stock.splits
+
+        if splits is None or splits.empty:
+            return []
+
+        result = []
+        for date_idx, ratio in splits.items():
+            result.append({
+                "date": str(date_idx.date()),
+                "ratio": float(ratio),
+            })
+
+        result.sort(key=lambda x: x["date"])
+        logger.info(f"Got {len(result)} stock splits for {ticker}")
+        return result
+
+    except Exception as e:
+        logger.error(f"yfinance splits error for {ticker}: {e}")
+        return []
+
+
+def get_key_financials(ticker: str) -> dict[str, Any]:
+    """Fetch key financial data from yfinance for cross-validation against SEC XBRL.
+
+    Returns revenue, net income, EPS, and other key metrics from yfinance's
+    financial statements. Used by the validation module to flag discrepancies.
+    """
+    if not _HAS_YFINANCE:
+        return {"error": "yfinance not installed"}
+
+    try:
+        stock = yf.Ticker(ticker.upper())
+        info = stock.info
+
+        return {
+            "ticker": ticker.upper(),
+            "revenue": info.get("totalRevenue"),
+            "net_income": info.get("netIncomeToCommon"),
+            "eps_trailing": info.get("trailingEps"),
+            "gross_margins": info.get("grossMargins"),
+            "operating_margins": info.get("operatingMargins"),
+            "market_cap": info.get("marketCap"),
+            "shares_outstanding": info.get("sharesOutstanding"),
+            "current_price": info.get("currentPrice") or info.get("regularMarketPrice"),
+            "beta": info.get("beta"),
+            "enterprise_value": info.get("enterpriseValue"),
+        }
+
+    except Exception as e:
+        logger.error(f"yfinance financials error for {ticker}: {e}")
+        return {"error": str(e)}
+
+
+def get_market_data(ticker: str) -> dict[str, Any] | None:
+    """Get current market data needed for valuation metric computation.
+
+    Returns a dict with price, market_cap, and shares_outstanding.
+    Used as input to xbrl_parser.compute_metrics(market_data=...).
+    """
+    if not _HAS_YFINANCE:
+        return None
+
+    try:
+        stock = yf.Ticker(ticker.upper())
+        info = stock.info
+
+        price = info.get("currentPrice") or info.get("regularMarketPrice")
+        mkt_cap = info.get("marketCap")
+        shares = info.get("sharesOutstanding")
+
+        if not price:
+            return None
+
+        return {
+            "price": float(price),
+            "market_cap": float(mkt_cap) if mkt_cap else None,
+            "shares_outstanding": float(shares) if shares else None,
+        }
+
+    except Exception as e:
+        logger.error(f"yfinance market data error for {ticker}: {e}")
+        return None
+
+
+def get_peers(ticker: str, n: int = 10) -> list[str]:
+    """Discover peer companies in the same sector/industry."""
+    if not _HAS_YFINANCE:
+        return []
+
+    try:
+        stock = yf.Ticker(ticker.upper())
         info = stock.info
         sector = info.get("sector", "")
         industry = info.get("industry", "")
 
-        # Get sector peers from known mappings
         peers = _get_sector_peers(ticker.upper(), sector, industry)
         return peers[:n]
     except Exception as e:
@@ -141,62 +285,36 @@ def get_historical_prices(
 # Sector Peer Mapping (curated for common sectors)
 # ──────────────────────────────────────────────
 
-_SECTOR_PEERS = {
-    # Semiconductors
-    "Semiconductors": [
-        "NVDA", "AMD", "INTC", "AVGO", "QCOM", "TXN", "ADI", "MRVL", "NXPI", "ON",
-        "MU", "LRCX", "KLAC", "ASML", "AMAT", "TSM",
+_SECTOR_PEERS: dict[str, list[str]] = {
+    "Technology": [
+        "AAPL", "MSFT", "GOOGL", "META", "NVDA", "AVGO", "ADBE", "CRM",
+        "CSCO", "INTC", "AMD", "QCOM", "TXN", "INTU", "NOW", "ORCL",
     ],
-    # Software
-    "Software—Infrastructure": [
-        "MSFT", "ORCL", "CRM", "NOW", "SNOW", "PLTR", "MDB", "DDOG", "NET", "PANW",
+    "Communication Services": [
+        "GOOGL", "META", "DIS", "CMCSA", "NFLX", "T", "VZ", "TMUS",
     ],
-    "Software—Application": [
-        "ADBE", "INTU", "SHOP", "SQ", "WDAY", "ZM", "DOCU", "HUBS", "VEEV", "TEAM",
+    "Consumer Cyclical": [
+        "AMZN", "TSLA", "HD", "MCD", "NKE", "SBUX", "LOW", "TJX",
     ],
-    # Internet
-    "Internet Content & Information": [
-        "GOOG", "META", "SNAP", "PINS", "RDDT", "SPOT",
+    "Healthcare": [
+        "UNH", "JNJ", "LLY", "ABBV", "MRK", "PFE", "TMO", "ABT", "DHR",
     ],
-    "Internet Retail": [
-        "AMZN", "BABA", "JD", "PDD", "MELI", "SE", "CPNG", "ETSY",
+    "Financial Services": [
+        "JPM", "BAC", "WFC", "GS", "MS", "BLK", "SCHW", "AXP", "V", "MA",
     ],
-    # Consumer
-    "Consumer Electronics": [
-        "AAPL", "SONY", "DELL", "HPQ", "LOGI",
+    "Energy": [
+        "XOM", "CVX", "COP", "SLB", "EOG", "PXD", "MPC", "VLO",
     ],
-    # Autos
-    "Auto Manufacturers": [
-        "TSLA", "TM", "F", "GM", "RIVN", "LCID", "NIO", "LI", "XPEV",
+    "Consumer Defensive": [
+        "PG", "KO", "PEP", "COST", "WMT", "PM", "MO", "CL",
     ],
-    # Financials
-    "Banks—Diversified": [
-        "JPM", "BAC", "WFC", "C", "GS", "MS", "USB", "PNC", "TFC", "COF",
-    ],
-    # Healthcare / Pharma
-    "Drug Manufacturers—General": [
-        "JNJ", "PFE", "MRK", "ABBV", "LLY", "NVO", "AZN", "BMY", "AMGN", "GILD",
-    ],
-    "Biotechnology": [
-        "MRNA", "REGN", "VRTX", "BIIB", "ILMN", "SGEN", "ALNY",
-    ],
-    # Energy
-    "Oil & Gas Integrated": [
-        "XOM", "CVX", "COP", "EOG", "SLB", "OXY", "PSX", "VLO", "MPC",
+    "Industrials": [
+        "UPS", "RTX", "HON", "CAT", "DE", "GE", "MMM", "LMT", "BA",
     ],
 }
 
 
 def _get_sector_peers(ticker: str, sector: str, industry: str) -> list[str]:
-    """Find peers based on industry, then sector."""
-    # Try industry first (more specific)
-    for key, tickers in _SECTOR_PEERS.items():
-        if key.lower() in industry.lower() or industry.lower() in key.lower():
-            return [t for t in tickers if t != ticker]
-
-    # Try sector match
-    for key, tickers in _SECTOR_PEERS.items():
-        if key.lower() in sector.lower() or sector.lower() in key.lower():
-            return [t for t in tickers if t != ticker]
-
-    return []
+    """Get peer tickers from the curated sector map, excluding the input ticker."""
+    peers = _SECTOR_PEERS.get(sector, [])
+    return [p for p in peers if p != ticker]
