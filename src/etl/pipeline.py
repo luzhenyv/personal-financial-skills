@@ -299,7 +299,7 @@ def ingest_company(
 
             for f in filings_to_dl:
                 accession = f.get("accession_number", "")
-                doc_url = f.get("primary_doc_url", "")
+                doc_url = f.get("primary_document", "")
                 if not doc_url:
                     continue
                 result = sec_client.download_filing_html(cik, f, dest_dir)
