@@ -8,9 +8,9 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 
-from src.api.deps import get_db
 from src.config import settings
 from src.db.models import Company, SecFiling
+from src.db.session import get_db
 
 router = APIRouter(prefix="/api/filings", tags=["filings"])
 

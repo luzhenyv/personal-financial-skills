@@ -8,7 +8,7 @@ from typing import Any
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 
-from src.api.deps import get_db
+from src.db.session import get_db
 from src.db.models import (
     BalanceSheet,
     CashFlowStatement,
