@@ -22,7 +22,7 @@ def render_overview_tab(d: CompanyPageData) -> None:
             f"No AI-generated profile data found for **{d.company['ticker']}**. "
             "Run the company-profile skill (Tasks 1–2) to generate overview, management, risks, and thesis data. "
             f"The data will appear here automatically once the JSON files exist in "
-            f"`data/processed/{d.company['ticker']}/`."
+            f"`data/artifacts/{d.company['ticker']}/`."
         )
         if d.company.get("description"):
             st.markdown('<div class="section-header">📄 Business Description</div>', unsafe_allow_html=True)

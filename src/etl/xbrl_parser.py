@@ -274,7 +274,7 @@ def _extract_fact_values(
 
     result = []
     for item in values:
-        fy = item.get("fy", 0)
+        fy = item.get("fy") or 0
         if fy < min_year:
             continue
 

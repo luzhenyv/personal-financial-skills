@@ -15,7 +15,7 @@ All per-share metrics displayed in the report and Streamlit app **must be split-
 1. **Query yfinance for split history**: `yf.Ticker(ticker).splits` returns a series of split dates and ratios
 2. **Compute cumulative split factor**: For each historical fiscal year, multiply all split ratios that occurred *after* that fiscal year's end date up to the present
 3. **Adjust**: `adjusted_eps = reported_eps / cumulative_split_factor`
-4. **Store the split history** in `data/processed/{TICKER}/stock_splits.json` for auditability
+4. **Store the split history** in `data/artifacts/{TICKER}/stock_splits.json` for auditability
 
 ### Example: NVDA (10:1 split on 2024-06-10)
 
@@ -67,7 +67,7 @@ if not splits.empty:
         ],
         "source": "yfinance"
     }
-    out = Path(f"data/processed/{ticker}/stock_splits.json")
+    out = Path(f"data/artifacts/{ticker}/stock_splits.json")
     out.parent.mkdir(parents=True, exist_ok=True)
     out.write_text(json.dumps(split_data, indent=2))
 ```

@@ -1,7 +1,7 @@
 ```skill
 ---
 name: thesis-tracker
-description: Create, update, and health-check investment theses for portfolio positions and watchlist names. Core question — "Is my buy reason still valid?" Triggers on "create thesis for [ticker]", "update thesis for [ticker]", "thesis health check [ticker]", "is my thesis still intact", "review my positions". Stores structured data in PostgreSQL and thesis markdown in data/processed/{ticker}/.
+description: Create, update, and health-check investment theses for portfolio positions and watchlist names. Core question — "Is my buy reason still valid?" Triggers on "create thesis for [ticker]", "update thesis for [ticker]", "thesis health check [ticker]", "is my thesis still intact", "review my positions". Stores structured data in PostgreSQL and thesis markdown in data/artifacts/{ticker}/.
 ---
 
 # Thesis Tracker
@@ -15,7 +15,7 @@ This skill is the **core state management layer** for the entire investment work
 
 **Data Flow**: `company-profile → thesis creation → PostgreSQL + thesis_{ticker}.md` → updates/health checks → DB + Streamlit
 
-**Storage**: PostgreSQL tables (`investment_theses`, `thesis_updates`, `thesis_health_checks`) + `data/processed/{TICKER}/thesis_{TICKER}.md` + Streamlit at `http://localhost:8501`
+**Storage**: PostgreSQL tables (`investment_theses`, `thesis_updates`, `thesis_health_checks`) + `data/artifacts/{TICKER}/thesis_{TICKER}.md` + Streamlit at `http://localhost:8501`
 
 ## Trigger
 
@@ -35,11 +35,11 @@ This skill is the **core state management layer** for the entire investment work
 
 ## Task 1: Thesis Creation
 
-Triggered when establishing a position or researching a stock. If `data/processed/{TICKER}/investment_thesis.json` exists (from company-profile), use it to seed bull case / risks.
+Triggered when establishing a position or researching a stock. If `data/artifacts/{TICKER}/investment_thesis.json` exists (from company-profile), use it to seed bull case / risks.
 
 **Ask the user for**: Ticker, Position (Long/Short), Core thesis (1-2 sentences), 3 Buy reasons, 3-5 Prerequisite assumptions (falsifiable, with weights), Sell conditions, Where I might be wrong.
 
-**Output**: Generate `data/processed/{TICKER}/thesis_{TICKER}.md` (see `references/output-templates.md`) + insert row into `investment_theses` table (see `references/database-schema.md`).
+**Output**: Generate `data/artifacts/{TICKER}/thesis_{TICKER}.md` (see `references/output-templates.md`) + insert row into `investment_theses` table (see `references/database-schema.md`).
 
 ```bash
 uv run python skills/thesis-tracker/scripts/create_thesis.py {TICKER} \

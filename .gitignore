@@ -48,9 +48,9 @@ MEMORY.md
 
 # Data files (keep .gitkeep)
 data/raw/*
-data/processed/*
+data/artifacts/*
 data/reports/*
 !data/raw/.gitkeep
-!data/processed/.gitkeep
+!data/artifacts/.gitkeep
 !data/reports/.gitkeep
 uv.lock

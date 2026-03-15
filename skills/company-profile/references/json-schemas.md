@@ -1,6 +1,6 @@
 # Task 2 JSON Schemas
 
-Task 2 is AI-driven — no script needed. Read `data/processed/{TICKER}/10k_raw_sections.json` and create each file below in `data/processed/{TICKER}/`.
+Task 2 is AI-driven — no script needed. Read `data/artifacts/{TICKER}/10k_raw_sections.json` and create each file below in `data/artifacts/{TICKER}/`.
 
 ## Guidelines
 

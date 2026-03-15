@@ -2,7 +2,7 @@
 Task 4: Generate Company Profile Report
 ========================================
 Assembles a comprehensive markdown company profile from:
-  - data/processed/{TICKER}/*.json  (created by Tasks 2 & 3)
+  - data/artifacts/{TICKER}/*.json  (created by Tasks 2 & 3)
   - PostgreSQL financial statements   (created by Task 1)
 
 Saves the report to:
@@ -13,7 +13,7 @@ Usage:
     uv run python skills/company-profile/scripts/generate_report.py NVDA
     uv run python skills/company-profile/scripts/generate_report.py AAPL --price 225.50
 
-Required JSON files in data/processed/{TICKER}/:
+Required JSON files in data/artifacts/{TICKER}/:
     company_overview.json       — business description, products, segments, geography
     management_team.json        — executives with bios
     risk_factors.json           — categorized risks from 10-K Item 1A
@@ -109,7 +109,7 @@ def query_financials(ticker: str, session, *, fiscal_year_end: str | None = None
     """Query all annual financial data for a ticker from PostgreSQL.
 
     Per-share fields (``eps_diluted``) are automatically split-adjusted to the
-    current share basis using ``data/processed/{TICKER}/stock_splits.json``.
+    current share basis using ``data/artifacts/{TICKER}/stock_splits.json``.
     """
     from src.splits import get_split_adjustor
 
@@ -620,7 +620,7 @@ def main():
     args = parser.parse_args()
 
     ticker = args.ticker.upper()
-    processed_dir = Path(f"data/processed/{ticker}")
+    processed_dir = Path(f"data/artifacts/{ticker}")
     reports_dir = Path(f"data/reports/{ticker}")
     reports_dir.mkdir(parents=True, exist_ok=True)
 

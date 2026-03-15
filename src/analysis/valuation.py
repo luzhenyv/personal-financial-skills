@@ -604,7 +604,7 @@ def _build_comps(
     current_price: float | None,
 ) -> CompsResult | None:
     """Build comps from ``comps_table.json`` if available, else return None."""
-    comps_path = Path("data/processed") / ticker / "comps_table.json"
+    comps_path = Path("data/artifacts") / ticker / "comps_table.json"
     if not comps_path.exists():
         return None
 

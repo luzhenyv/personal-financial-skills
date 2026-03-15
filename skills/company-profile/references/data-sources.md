@@ -6,10 +6,10 @@ Maps each data field in the company profile to its source and storage location.
 
 ```
 SEC EDGAR → data/raw/{ticker}/ (10-K/Q PDFs, XBRL JSON)
-LLM parse → data/processed/{ticker}/ (structured JSON)
+LLM parse → data/artifacts/{ticker}/ (structured JSON)
 ETL pipeline → PostgreSQL (financial tables)
 yfinance/Alpha Vantage → PostgreSQL (prices, market data)
-Web search → data/processed/{ticker}/ (competitive intel)
+Web search → data/artifacts/{ticker}/ (competitive intel)
 ```
 
 ## Company Metadata

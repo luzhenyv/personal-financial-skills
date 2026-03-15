@@ -22,7 +22,7 @@ The objective score is the weighted average of per-assumption KPI scores, using 
 
 - PostgreSQL tables: `income_statements`, `balance_sheets`, `financial_metrics`
 - Latest price data: `daily_prices`
-- Processed JSON: `data/processed/{TICKER}/*.json`
+- Artifact JSON: `data/artifacts/{TICKER}/*.json`
 
 ## Subjective Score (40% weight)
 

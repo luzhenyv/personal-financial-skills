@@ -1,6 +1,6 @@
 """Stock-split adjustment utilities.
 
-Reads ``data/processed/{TICKER}/stock_splits.json`` and computes cumulative
+Reads ``data/artifacts/{TICKER}/stock_splits.json`` and computes cumulative
 split factors so that per-share metrics from different filing eras can be
 restated to the **current** share basis.
 
@@ -20,8 +20,8 @@ from pathlib import Path
 from typing import Callable
 
 
-def load_splits(ticker: str, base: str = "data/processed") -> list[dict]:
-    """Load the split history for *ticker* from the processed JSON file.
+def load_splits(ticker: str, base: str = "data/artifacts") -> list[dict]:
+    """Load the split history for *ticker* from the artifacts JSON file.
 
     Returns a list of ``{"date": "YYYY-MM-DD", "ratio": <int|float>}`` dicts,
     sorted ascending by date.  Returns ``[]`` if the file does not exist.
@@ -67,7 +67,7 @@ def get_split_adjustor(
     ticker: str,
     fiscal_year_end: str | None = None,
     *,
-    base: str = "data/processed",
+    base: str = "data/artifacts",
 ) -> Callable[[int, float | None], float | None]:
     """Return a function ``adjust(fiscal_year, value) -> adjusted_value``.
 
@@ -78,7 +78,7 @@ def get_split_adjustor(
     Args:
         ticker: Upper-case ticker symbol.
         fiscal_year_end: ``"MMDD"`` string (e.g. ``"0131"`` for January 31).
-        base: Root directory for processed data files.
+        base: Root directory containing ``{ticker}/stock_splits.json``.
     """
     splits = load_splits(ticker, base=base)
     month, day = _parse_fiscal_year_end(fiscal_year_end)

@@ -113,7 +113,7 @@ def get_profile_data(ticker: str, years: int = 7) -> dict[str, Any]:
 def generate_tearsheet(ticker: str) -> str:
     """Generate a concise markdown tearsheet for *ticker*.
 
-    Pulls from processed JSON files (``data/processed/<ticker>/``) and the
+    Pulls from artifact JSON files (``data/artifacts/<ticker>/``) and the
     database.  Any missing data source is skipped gracefully.
 
     Args:
@@ -122,7 +122,7 @@ def generate_tearsheet(ticker: str) -> str:
     Returns:
         A markdown string suitable for display or download.
     """
-    processed_dir = Path("data/processed") / ticker
+    processed_dir = Path("data/artifacts") / ticker
 
     def _load(filename: str) -> dict[str, Any] | list | None:
         path = processed_dir / filename

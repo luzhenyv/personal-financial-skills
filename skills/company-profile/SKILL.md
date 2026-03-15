@@ -1,6 +1,6 @@
 ---
 name: company-profile
-description: Generate a comprehensive company profile report for a US public company through a 4-task workflow — (1) data ingestion from SEC 10-K/Q filings, yfinance, and web search, (2) company research including management, competitive landscape, and risks, (3) financial analysis with comparable companies, (4) report generation. Raw filings saved to data/raw/{ticker}/, processed data to data/processed/{ticker}/, structured data to PostgreSQL.
+description: Generate a comprehensive company profile report for a US public company through a 4-task workflow — (1) data ingestion from SEC 10-K/Q filings, yfinance, and web search, (2) company research including management, competitive landscape, and risks, (3) financial analysis with comparable companies, (4) report generation. Raw filings saved to data/raw/{ticker}/, AI-generated artifacts to data/artifacts/{ticker}/, structured data to PostgreSQL.
 ---
 
 # Company Profile
@@ -11,7 +11,7 @@ Generate a comprehensive company profile report through a structured 4-task work
 
 This skill produces company profile reports sourced primarily from **SEC 10-K/Q filings** (the authoritative source), supplemented by yfinance and web search.
 
-**Data Flow**: SEC EDGAR → `data/raw/{ticker}/` → `data/processed/{ticker}/*.json` → PostgreSQL → `data/reports/{ticker}/company_profile.md` → Streamlit (`http://localhost:8501`)
+**Data Flow**: SEC EDGAR → `data/raw/{ticker}/` → `data/artifacts/{ticker}/*.json` → PostgreSQL → `data/reports/{ticker}/company_profile.md` → Streamlit (`http://localhost:8501`)
 
 **Data Source Priority**: (1) SEC EDGAR XBRL+HTML, (2) yfinance, (3) Alpha Vantage (tiebreaker when sources conflict by >2%). See `references/data-sources.md` for full mapping.
 
@@ -42,7 +42,7 @@ uv run python skills/company-profile/scripts/ingest.py {TICKER}
 #   --quarterly      also load quarterly statements
 ```
 
-The script automatically: resolves ticker→CIK, runs XBRL ETL to PostgreSQL, downloads 10-K/Q HTML to `data/raw/{TICKER}/`, extracts section text to `data/processed/{TICKER}/10k_raw_sections.json` (items 1, 1A, 7, 10), and saves stock split history to `stock_splits.json`.
+The script automatically: resolves ticker→CIK, runs XBRL ETL to PostgreSQL, downloads 10-K/Q HTML to `data/raw/{TICKER}/`, extracts section text to `data/artifacts/{TICKER}/10k_raw_sections.json` (items 1, 1A, 7, 10), and saves stock split history to `data/artifacts/{TICKER}/stock_splits.json`.
 
 Require **at least 3 years** of annual data before proceeding.
 
@@ -52,7 +52,7 @@ Require **at least 3 years** of annual data before proceeding.
 
 ## Task 2: Company Research (AI-Driven)
 
-Read `data/processed/{TICKER}/10k_raw_sections.json` and create 6 structured JSON files in `data/processed/{TICKER}/`. No script — this is entirely AI-driven.
+Read `data/artifacts/{TICKER}/10k_raw_sections.json` and create 6 structured JSON files in `data/artifacts/{TICKER}/`. No script — this is entirely AI-driven.
 
 **Files to create** (see `references/json-schemas.md` for full schemas):
 
@@ -74,7 +74,7 @@ uv run python skills/company-profile/scripts/build_comps.py {TICKER}
 #   --peers AMD,INTC,AVGO,QCOM    override peer list
 ```
 
-Reads peers from `competitive_landscape.json`, fetches market cap / revenue / margins / multiples via yfinance, computes peer statistics. Saves → `data/processed/{TICKER}/comps_table.json`.
+Reads peers from `competitive_landscape.json`, fetches market cap / revenue / margins / multiples via yfinance, computes peer statistics. Saves → `data/artifacts/{TICKER}/comps_table.json`.
 
 ---
 

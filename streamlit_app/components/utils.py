@@ -11,13 +11,13 @@ from pathlib import Path
 # File loaders
 # ──────────────────────────────────────────────
 
-def load_json(ticker: str, filename: str, base: str = "data/processed") -> dict | None:
-    """Load a processed JSON file for a ticker.
+def load_json(ticker: str, filename: str, base: str = "data/artifacts") -> dict | None:
+    """Load an artifact JSON file for a ticker.
 
     Args:
         ticker: Company ticker symbol (e.g. ``"NVDA"``).
-        filename: JSON filename inside the ticker folder (e.g. ``"company_overview.json"``).
-        base: Base directory relative to the CWD. Defaults to ``"data/processed"``.
+        filename: JSON filename inside the artifacts folder (e.g. ``"company_overview.json"``).
+        base: Base directory relative to the CWD. Defaults to ``"data/artifacts"``.
 
     Returns:
         Parsed dict, or ``None`` if the file does not exist.

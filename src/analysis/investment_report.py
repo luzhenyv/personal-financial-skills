@@ -1,7 +1,7 @@
 """Investment report generator.
 
 Produces a comprehensive markdown investment report by combining:
-  - Processed JSON files (``data/processed/<ticker>/``)
+  - Artifact JSON files (``data/artifacts/<ticker>/``)
   - Database financials (via :func:`~src.analysis.company_profile.get_profile_data`)
   - DCF valuation (via :func:`~src.analysis.valuation.valuation_summary`)
 
@@ -87,7 +87,7 @@ def generate_investment_report(
         Full markdown report as a string.
     """
     ticker = ticker.upper()
-    processed = Path("data/processed") / ticker
+    processed = Path("data/artifacts") / ticker
 
     # ── Load JSON sources ───────────────────────────────────────────────────
     overview: dict = _load_json(processed / "company_overview.json") or {}

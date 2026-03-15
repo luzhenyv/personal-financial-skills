@@ -1,6 +1,6 @@
 # Output Templates
 
-Markdown templates for thesis files written to `data/processed/{TICKER}/thesis_{TICKER}.md`.
+Markdown templates for thesis files written to `data/artifacts/{TICKER}/thesis_{TICKER}.md`.
 
 ## Thesis Creation Template
 

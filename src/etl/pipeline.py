@@ -316,7 +316,7 @@ def ingest_company(
         try:
             splits = get_stock_splits(ticker)
             if splits:
-                split_dir = settings.processed_dir / ticker
+                split_dir = settings.ticker_artifacts_dir(ticker)
                 split_dir.mkdir(parents=True, exist_ok=True)
                 split_path = split_dir / "stock_splits.json"
                 split_path.write_text(json.dumps(splits, indent=2, default=str))

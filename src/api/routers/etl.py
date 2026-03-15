@@ -7,6 +7,7 @@ from typing import Any
 
 from fastapi import APIRouter, Depends, Query
 from pydantic import BaseModel
+from sqlalchemy import inspect as sa_inspect
 from sqlalchemy.orm import Session
 
 from src.db.session import get_db
@@ -33,9 +34,9 @@ class SyncPricesRequest(BaseModel):
 
 def _row_to_dict(obj) -> dict[str, Any]:
     result = {}
-    for col in obj.__table__.columns:
-        val = getattr(obj, col.name)
-        result[col.name] = val
+    mapper = sa_inspect(type(obj))
+    for col_attr in mapper.mapper.column_attrs:
+        result[col_attr.key] = getattr(obj, col_attr.key)
     return result
 
 

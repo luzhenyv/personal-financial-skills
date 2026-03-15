@@ -157,5 +157,5 @@
 ---
 
 **Data Sources**: SEC EDGAR 10-K/Q (primary), yfinance, Alpha Vantage, web search
-**Raw Filings**: `data/raw/{ticker}/` | **Processed Data**: `data/processed/{ticker}/`
+**Raw Filings**: `data/raw/{ticker}/` | **Artifacts**: `data/artifacts/{ticker}/`
 *Generated on {generation_date} | View interactive dashboard: http://localhost:8501*

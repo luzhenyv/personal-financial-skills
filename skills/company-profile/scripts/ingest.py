@@ -5,13 +5,13 @@ Runs the full ETL pipeline for a given ticker:
   1. Resolve ticker → CIK
   2. Ingest XBRL financial data to PostgreSQL (income, balance, cashflow, metrics)
   3. Download latest 10-K and most recent 10-Q HTML to data/raw/{TICKER}/
-  4. Extract raw section text (Item 1, 1A, 7, 10) to data/processed/{TICKER}/10k_raw_sections.json
+  4. Extract raw section text (Item 1, 1A, 7, 10) to data/artifacts/{TICKER}/10k_raw_sections.json
 
 Usage:
     uv run python skills/company-profile/scripts/ingest.py NVDA
     uv run python skills/company-profile/scripts/ingest.py AAPL --years 7
 
-After this script completes, use the raw sections in data/processed/{TICKER}/10k_raw_sections.json
+After this script completes, use the raw sections in data/artifacts/{TICKER}/10k_raw_sections.json
 to populate the 5 structured JSON files (company_overview, management_team, risk_factors,
 competitive_landscape, financial_segments) as part of Task 2.
 """
@@ -129,7 +129,7 @@ def main():
 
     ticker = args.ticker.upper()
     raw_dir = Path(f"data/raw/{ticker}")
-    processed_dir = Path(f"data/processed/{ticker}")
+    processed_dir = Path(f"data/artifacts/{ticker}")
     raw_dir.mkdir(parents=True, exist_ok=True)
     processed_dir.mkdir(parents=True, exist_ok=True)
 
@@ -192,17 +192,17 @@ def main():
     logger.info(f"TASK 1 COMPLETE: {ticker}")
     logger.info(f"{'='*60}")
     logger.info(f"  Raw files  : {list(raw_dir.iterdir())}")
-    logger.info(f"  Processed  : {sections_path} ({'exists' if sections_path.exists() else 'MISSING'})")
+    logger.info(f"  Artifacts  : {sections_path} ({'exists' if sections_path.exists() else 'MISSING'})")
     logger.info(f"  DB records : income={result['income_statements']}, "
                 f"bs={result['balance_sheets']}, cf={result['cash_flow_statements']}, "
                 f"metrics={result['financial_metrics']}")
     logger.info(f"\nNEXT STEP (Task 2): Read {sections_path} and populate:")
-    logger.info(f"  data/processed/{ticker}/company_overview.json")
-    logger.info(f"  data/processed/{ticker}/management_team.json")
-    logger.info(f"  data/processed/{ticker}/risk_factors.json")
-    logger.info(f"  data/processed/{ticker}/competitive_landscape.json")
-    logger.info(f"  data/processed/{ticker}/financial_segments.json")
-    logger.info(f"  data/processed/{ticker}/investment_thesis.json")
+    logger.info(f"  data/artifacts/{ticker}/company_overview.json")
+    logger.info(f"  data/artifacts/{ticker}/management_team.json")
+    logger.info(f"  data/artifacts/{ticker}/risk_factors.json")
+    logger.info(f"  data/artifacts/{ticker}/competitive_landscape.json")
+    logger.info(f"  data/artifacts/{ticker}/financial_segments.json")
+    logger.info(f"  data/artifacts/{ticker}/investment_thesis.json")
 
 
 if __name__ == "__main__":

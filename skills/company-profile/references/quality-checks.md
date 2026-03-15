@@ -5,8 +5,8 @@ Run these checks after completing all 4 tasks for a given ticker.
 ## Data Completeness
 
 - [ ] `data/raw/{TICKER}/10-K_*.htm` exists (raw annual filing downloaded)
-- [ ] `data/processed/{TICKER}/10k_raw_sections.json` exists with non-empty sections
-- [ ] All 6 JSON files exist in `data/processed/{TICKER}/`
+- [ ] `data/artifacts/{TICKER}/10k_raw_sections.json` exists with non-empty sections
+- [ ] All 6 JSON files exist in `data/artifacts/{TICKER}/`
 - [ ] At least 3 years of annual data in all DB tables
 - [ ] Revenue figures in correct magnitude (billions vs millions — verify against XBRL)
 

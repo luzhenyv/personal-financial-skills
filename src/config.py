@@ -36,8 +36,12 @@ class Settings(BaseSettings):
         return self.data_dir / "raw"
 
     @property
-    def processed_dir(self) -> Path:
-        return self.data_dir / "processed"
+    def artifacts_dir(self) -> Path:
+        return self.data_dir / "artifacts"
+
+    def ticker_artifacts_dir(self, ticker: str) -> Path:
+        """Return the artifacts directory for *ticker* (``data/artifacts/{ticker}``)."""
+        return self.artifacts_dir / ticker
 
     @property
     def reports_dir(self) -> Path:
@@ -45,7 +49,7 @@ class Settings(BaseSettings):
 
     def ensure_dirs(self) -> None:
         """Create data directories if they don't exist."""
-        for d in [self.raw_dir, self.processed_dir, self.reports_dir]:
+        for d in [self.raw_dir, self.artifacts_dir, self.reports_dir]:
             d.mkdir(parents=True, exist_ok=True)
 
 

@@ -114,7 +114,7 @@ def main():
 
     result = create_thesis(ticker, **data)
     print(f"\n✅ Thesis created for {ticker} (id={result['id']})")
-    print(f"   File: data/processed/{ticker}/thesis_{ticker}.md")
+    print(f"   File: data/artifacts/{ticker}/thesis_{ticker}.md")
 
 
 if __name__ == "__main__":
