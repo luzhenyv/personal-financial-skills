@@ -137,6 +137,52 @@ _CSS = """
         font-size: 0.8rem;
         margin: 0.15rem 0.15rem;
     }
+
+    /* ── AI Profile status badge (shown in company header) ── */
+    .profile-badge {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.35rem;
+        font-size: 0.78rem;
+        font-weight: 600;
+        padding: 0.25rem 0.75rem;
+        border-radius: 1rem;
+        margin-top: 0.6rem;
+    }
+    .profile-badge.ready {
+        background: rgba(16, 185, 129, 0.2);
+        color: #6ee7b7;
+        border: 1px solid rgba(16, 185, 129, 0.45);
+    }
+    .profile-badge.missing {
+        background: rgba(245, 158, 11, 0.2);
+        color: #fcd34d;
+        border: 1px solid rgba(245, 158, 11, 0.45);
+    }
+
+    /* ── No-profile empty-state banner ── */
+    .no-profile-banner {
+        background: linear-gradient(135deg, #fffbeb 0%, #fef3c7 100%);
+        border: 2px solid #f59e0b;
+        border-radius: 1rem;
+        padding: 2.25rem 2rem;
+        text-align: center;
+        margin-bottom: 1.5rem;
+    }
+    .no-profile-banner .no-profile-icon { font-size: 3rem; margin-bottom: 0.75rem; }
+    .no-profile-banner h3 { color: #92400e; margin: 0 0 0.5rem 0; font-size: 1.3rem; }
+    .no-profile-banner p { color: #78350f; font-size: 0.93rem; line-height: 1.65; margin: 0 0 0.75rem 0; }
+    .no-profile-banner .profile-cmd {
+        display: inline-block;
+        background: #fde68a;
+        color: #78350f;
+        border: 1px solid #f59e0b;
+        padding: 0.3rem 0.9rem;
+        border-radius: 0.4rem;
+        font-family: monospace;
+        font-size: 0.85rem;
+        margin-top: 0.25rem;
+    }
 </style>
 """
 

@@ -18,11 +18,22 @@ def render_overview_tab(d: CompanyPageData) -> None:
         d: Populated :class:`~streamlit_app.components.data_loader.CompanyPageData`.
     """
     if not d.has_profile:
-        st.info(
-            f"No AI-generated profile data found for **{d.company['ticker']}**. "
-            "Run the company-profile skill (Tasks 1–3) to generate overview, management, risks, and thesis data. "
-            f"The data will appear here automatically once the JSON files exist in "
-            f"`data/artifacts/{d.company['ticker']}/profile/`."
+        ticker = d.company['ticker']
+        st.markdown(
+            f"""
+            <div class="no-profile-banner">
+                <div class="no-profile-icon">🤖</div>
+                <h3>No AI-Generated Profile Data</h3>
+                <p>
+                    AI-driven analysis for <strong>{ticker}</strong> hasn't been generated yet.<br>
+                    Run the <strong>company-profile skill</strong> (Tasks 1–3) to populate the
+                    overview, management bios, competitive analysis, and thesis data.
+                </p>
+                <p>Data will appear automatically once JSON files exist in<br>
+                <span class="profile-cmd">data/artifacts/{ticker}/profile/</span></p>
+            </div>
+            """,
+            unsafe_allow_html=True,
         )
         if d.company.get("description"):
             st.markdown('<div class="section-header">📄 Business Description</div>', unsafe_allow_html=True)

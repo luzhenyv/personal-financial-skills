@@ -18,10 +18,22 @@ def render_research_tab(d: CompanyPageData) -> None:
         d: Populated :class:`~streamlit_app.components.data_loader.CompanyPageData`.
     """
     if not d.has_profile:
-        st.info(
-            f"No research data found for **{d.company['ticker']}**. "
-            "Run the company-profile skill to generate competitive landscape, "
-            "thesis, and risk analysis."
+        ticker = d.company['ticker']
+        st.markdown(
+            f"""
+            <div class="no-profile-banner">
+                <div class="no-profile-icon">🔬</div>
+                <h3>No Research Data Available</h3>
+                <p>
+                    Competitive landscape, thesis, and risk analysis for <strong>{ticker}</strong>
+                    haven't been generated yet.<br>
+                    Run the <strong>company-profile skill</strong> to generate this content.
+                </p>
+                <p>Data will appear automatically once JSON files exist in<br>
+                <span class="profile-cmd">data/artifacts/{ticker}/profile/</span></p>
+            </div>
+            """,
+            unsafe_allow_html=True,
         )
         return
 

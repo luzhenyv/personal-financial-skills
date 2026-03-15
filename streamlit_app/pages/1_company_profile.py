@@ -143,11 +143,16 @@ source_info = d.overview.get("source", "") if d.overview else ""
 price_str = f"${d.current_price:,.2f}" if d.current_price else "N/A"
 mktcap_str = f"${mkt_cap / 1e9:,.0f}B" if mkt_cap else "N/A"
 
+_badge_class = "ready" if d.has_profile else "missing"
+_badge_icon = "✓" if d.has_profile else "⚠"
+_badge_text = "AI Profile Ready" if d.has_profile else "No AI Profile"
+
 st.markdown(
     f"""
     <div class="company-header">
         <h1>{d.company['name']} ({d.company['ticker']})</h1>
         <div class="subtitle">{sector} · {industry} · {source_info}</div>
+        <span class="profile-badge {_badge_class}">{_badge_icon} {_badge_text}</span>
     </div>
     """,
     unsafe_allow_html=True,
