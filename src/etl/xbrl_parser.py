@@ -445,9 +445,9 @@ def get_available_fiscal_years(facts: dict[str, Any], min_year: int = 2020) -> l
         tag_data = us_gaap.get(tag, {})
         units = tag_data.get("units", {}).get("USD", [])
         for item in units:
-            fy = item.get("fy", 0)
+            fy = item.get("fy")
             fp = item.get("fp", "")
-            if fy >= min_year and fp == "FY":
+            if fy is not None and fy >= min_year and fp == "FY":
                 all_years.add(fy)
 
     return sorted(all_years)
