@@ -167,16 +167,21 @@ See [`docs/api.md`](docs/api.md) for full endpoint documentation.
 
 | Method | Path | Description |
 |---|---|---|
-| `POST` | `/api/companies/ingest` | Trigger ETL for a ticker |
+| `GET` | `/health` | Server health check |
 | `GET` | `/api/companies/` | List all ingested companies |
+| `GET` | `/api/companies/{ticker}` | Get a single company |
+| `POST` | `/api/etl/ingest` | Trigger ETL for a ticker |
+| `POST` | `/api/etl/sync-prices` | Sync daily prices |
+| `GET` | `/api/etl/runs` | ETL run history |
+| `GET` | `/api/filings/{ticker}` | List SEC filings |
+| `GET` | `/api/filings/{ticker}/{filing_id}` | Get a single filing |
+| `GET` | `/api/filings/{ticker}/{filing_id}/content` | Stream raw filing HTML |
 | `GET` | `/api/financials/{ticker}/income-statements` | Income statements |
 | `GET` | `/api/financials/{ticker}/balance-sheets` | Balance sheets |
 | `GET` | `/api/financials/{ticker}/cash-flows` | Cash flow statements |
 | `GET` | `/api/financials/{ticker}/metrics` | Computed metrics (P/E, EV/EBITDA…) |
 | `GET` | `/api/financials/{ticker}/prices` | Price history |
-| `GET` | `/api/analysis/{ticker}/profile` | Structured profile (JSON) |
-| `POST` | `/api/analysis/{ticker}/tearsheet` | Generate tearsheet via Agent |
-| `GET` | `/api/analysis/{ticker}/tearsheet` | Get saved tearsheet |
+| `GET` | `/api/financials/{ticker}/segments` | Revenue segments |
 
 ---
 

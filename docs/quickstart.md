@@ -131,11 +131,13 @@ This starts PostgreSQL, the FastAPI server, and Streamlit together.
 docker compose up -d
 
 # Ingest a company
-uv run python -m src.etl.pipeline ingest NVDA --years 5
+curl -s -X POST http://localhost:8000/api/etl/ingest \
+  -H "Content-Type: application/json" \
+  -d '{"ticker": "NVDA", "years": 5}'
+
+# Check ingestion status
+curl "http://localhost:8000/api/etl/runs?ticker=NVDA&limit=1"
 
 # Open Streamlit and view the Company Profile page
 open http://localhost:8501
-
-# Ask the Agent to draft a thesis (in the Chat UI or via API)
-curl -X POST http://localhost:8000/api/analysis/NVDA/tearsheet
 ```

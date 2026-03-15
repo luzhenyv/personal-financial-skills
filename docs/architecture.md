@@ -81,7 +81,7 @@ Streamlit is a pure read layer. It renders artifacts and calls the MCP API for l
 | Earnings Feed | `artifacts/{t}/earnings/` (timeline) |
 | Watchlist | Portfolio config + `/api/financials/*/metrics` |
 | Trade Signals | `/api/financials/{t}/metrics` (MACD, RSI) |
-| ETL Status | `/api/etl/audit` |
+| ETL Status | `/api/etl/runs` |
 
 **`artifact_renderer.py`** is the bridge between the Agent plane and the UI. It reads `.json` for structured fields (metric tables, chart data) and `.md` for narrative sections. Streamlit pages never need to know how an artifact was generated.
 
