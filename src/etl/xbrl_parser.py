@@ -109,6 +109,7 @@ BALANCE_SHEET_TAGS: dict[str, list[str]] = {
         "ShortTermInvestments",
         "MarketableSecuritiesCurrent",
         "AvailableForSaleSecuritiesDebtSecuritiesCurrent",
+        "OtherShortTermInvestments",
     ],
     "accounts_receivable": [
         "AccountsReceivableNetCurrent",
@@ -149,6 +150,8 @@ BALANCE_SHEET_TAGS: dict[str, list[str]] = {
         "ShortTermBorrowings",
         "DebtCurrent",
         "LongTermDebtCurrent",
+        "CommercialPaper",
+        "OtherShortTermBorrowings",
     ],
     "total_current_liabilities": [
         "LiabilitiesCurrent",
@@ -157,6 +160,7 @@ BALANCE_SHEET_TAGS: dict[str, list[str]] = {
         "LongTermDebtNoncurrent",
         "LongTermDebt",
         "LongTermDebtAndCapitalLeaseObligations",
+        "ConvertibleDebtNoncurrent",
     ],
     "total_liabilities": [
         "Liabilities",
@@ -201,6 +205,7 @@ CASH_FLOW_TAGS: dict[str, list[str]] = {
         "PaymentsToAcquirePropertyPlantAndEquipment",
         "PaymentsToAcquireProductiveAssets",
         "PaymentsForCapitalImprovements",
+        "PaymentsToAcquireOtherProductiveAssets",
     ],
     "acquisitions": [
         "PaymentsToAcquireBusinessesNetOfCashAcquired",
@@ -224,11 +229,13 @@ CASH_FLOW_TAGS: dict[str, list[str]] = {
         "ProceedsFromIssuanceOfLongTermDebt",
         "ProceedsFromDebtNetOfIssuanceCosts",
         "ProceedsFromIssuanceOfDebt",
+        "ProceedsFromDebtMaturingInMoreThanThreeMonths",
     ],
     "debt_repayment": [
         "RepaymentsOfLongTermDebt",
         "RepaymentsOfDebt",
         "RepaymentsOfLongTermDebtAndCapitalSecurities",
+        "RepaymentsOfDebtMaturingInMoreThanThreeMonths",
     ],
     "share_repurchase": [
         "PaymentsForRepurchaseOfCommonStock",
@@ -440,6 +447,14 @@ def parse_balance_sheet(
         result[field] = val
         if values:
             raw_values[field] = {"tag": tags[0], "values": values[-3:]}
+
+    # Derived: total_liabilities = total_assets - total_stockholders_equity
+    # Some companies (e.g. KO) don't tag Liabilities separately
+    if result.get("total_liabilities") is None:
+        ta = result.get("total_assets")
+        eq = result.get("total_stockholders_equity")
+        if ta is not None and eq is not None:
+            result["total_liabilities"] = ta - eq
 
     result["raw_json"] = raw_values
     return result
