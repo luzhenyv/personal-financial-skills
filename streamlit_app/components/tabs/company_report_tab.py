@@ -50,7 +50,9 @@ def render_report_tab(d: CompanyPageData, rev_growth: float, wacc: float) -> Non
     display_report: str | None = st.session_state.get(f"report_{ticker}")
 
     if not display_report:
-        inv_path = Path("data/reports") / ticker / "investment_report.md"
+        inv_profile = Path("data/artifacts") / ticker / "profile" / "investment_report.md"
+        inv_legacy = Path("data/reports") / ticker / "investment_report.md"
+        inv_path = inv_profile if inv_profile.exists() else inv_legacy
         if inv_path.exists():
             display_report = inv_path.read_text(encoding="utf-8")
             st.session_state[f"report_{ticker}"] = display_report

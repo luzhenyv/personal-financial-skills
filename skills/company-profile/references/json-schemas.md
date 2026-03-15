@@ -1,13 +1,15 @@
-# Task 2 JSON Schemas
+# Task 1 JSON Schemas
 
-Task 2 is AI-driven — no script needed. Read `data/artifacts/{TICKER}/10k_raw_sections.json` and create each file below in `data/artifacts/{TICKER}/`.
+Task 1 is AI-driven — no script needed. Read data from MCP tools and `data/artifacts/{TICKER}/profile/10k_raw_sections.json`, then create each file below in `data/artifacts/{TICKER}/profile/`.
 
 ## Guidelines
 
-- Source each fact to Item 1, Item 1A, or Item 7 of the 10-K
+- Use MCP tools (`get_income_statements`, `get_revenue_segments`, `get_company`, etc.) as the primary data source
+- Source qualitative content from Item 1, Item 1A, or Item 7 of the 10-K (via `10k_raw_sections.json`)
 - For `risk_factors.json`: quote or closely paraphrase actual Item 1A language
 - For `competitive_landscape.json`: use tickers that `build_comps.py` can look up on Yahoo Finance
-- Cross-check revenue segment figures against the XBRL data in PostgreSQL
+- Cross-check revenue segment figures against MCP `get_revenue_segments` data
+- Every JSON file must include a `"schema_version": "1.0"` field
 
 ---
 
@@ -15,6 +17,7 @@ Task 2 is AI-driven — no script needed. Read `data/artifacts/{TICKER}/10k_raw_
 
 ```json
 {
+  "schema_version": "1.0",
   "ticker": "AAPL",
   "company_name": "Apple Inc.",
   "cik": "0000320193",
@@ -45,6 +48,7 @@ Task 2 is AI-driven — no script needed. Read `data/artifacts/{TICKER}/10k_raw_
 
 ```json
 {
+  "schema_version": "1.0",
   "ticker": "AAPL",
   "source": "10-K FY2025 Item 10 + proxy DEF 14A",
   "executives": [
@@ -73,6 +77,7 @@ Include **8–12 risks** across 4 categories: Company-Specific (4–6), Industry
 
 ```json
 {
+  "schema_version": "1.0",
   "ticker": "AAPL",
   "source": "10-K FY2025 Item 1A",
   "risks": [
@@ -91,6 +96,7 @@ Include **5–8 competitors** (direct + indirect). The `ticker` field is used by
 
 ```json
 {
+  "schema_version": "1.0",
   "ticker": "AAPL",
   "source": "10-K FY2025 + market research",
   "moat": "...",
@@ -112,6 +118,7 @@ Include **5–8 competitors** (direct + indirect). The `ticker` field is used by
 
 ```json
 {
+  "schema_version": "1.0",
   "ticker": "AAPL",
   "source": "10-K FY2025 MD&A",
   "fiscal_year": 2025,
@@ -130,6 +137,7 @@ Include **4–6 bull case points** and **3–5 opportunities**, each with specif
 
 ```json
 {
+  "schema_version": "1.0",
   "ticker": "AAPL",
   "source": "10-K FY2025 MD&A + analysis",
   "bull_case": [

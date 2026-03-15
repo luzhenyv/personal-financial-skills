@@ -1,11 +1,11 @@
 """
-Task 3.4: Build Comparable Company Analysis Table
-==================================================
+Task 2: Build Comparable Company Analysis Table
+================================================
 Fetches market data for the subject company and its peers from Yahoo Finance,
-builds a standardized comps table, and saves it to data/artifacts/{TICKER}/comps_table.json.
+builds a standardized comps table, and saves it to data/artifacts/{TICKER}/profile/comps_table.json.
 
 Peer discovery priority:
-  1. Tickers listed in data/artifacts/{TICKER}/competitive_landscape.json (curated by Task 2)
+  1. Tickers listed in data/artifacts/{TICKER}/profile/competitive_landscape.json (curated by Task 1)
   2. Fallback: yfinance recommended peers for the ticker
 
 Usage:
@@ -49,8 +49,8 @@ def fetch_peer_data(ticker: str) -> dict:
 
 
 def get_peers_from_processed(ticker: str) -> list[str]:
-    """Extract peer tickers from the curated competitive_landscape.json (Task 2 output)."""
-    path = Path(f"data/artifacts/{ticker}/competitive_landscape.json")
+    """Extract peer tickers from the curated competitive_landscape.json (Task 1 output)."""
+    path = Path(f"data/artifacts/{ticker}/profile/competitive_landscape.json")
     if not path.exists():
         return []
     data = json.loads(path.read_text())
@@ -108,7 +108,7 @@ def compute_summary(rows: list[dict], exclude_ticker: str) -> dict:
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Task 3.4: Build comps table")
+    parser = argparse.ArgumentParser(description="Task 2: Build comps table")
     parser.add_argument("ticker", help="Subject company ticker, e.g. NVDA")
     parser.add_argument(
         "--peers",
@@ -118,7 +118,7 @@ def main():
     args = parser.parse_args()
 
     ticker = args.ticker.upper()
-    processed_dir = Path(f"data/artifacts/{ticker}")
+    processed_dir = Path(f"data/artifacts/{ticker}/profile")
     processed_dir.mkdir(parents=True, exist_ok=True)
 
     # ── Determine peer list ────────────────────────────────────────────────────

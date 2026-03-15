@@ -11,17 +11,17 @@ Each skill is a self-contained directory with:
 
 ## Available Skills
 
-| Skill | Purpose | Status |
-|-------|---------|--------|
-| `company-profile/` | Generate 1-page markdown tearsheet for a company | ✅ |
-| `financial-etl/` | Fetch SEC XBRL data → parse → store in PostgreSQL | ✅ |
-| `etl-coverage/` | Audit ETL data coverage, find unmapped XBRL tags, diagnose NULLs | ✅ |
-| `three-statements/` | 3-statement financial model in markdown | 🔜 |
-| `dcf-valuation/` | Simplified DCF model with sensitivity analysis | 🔜 |
-| `comps-analysis/` | Comparable company analysis from DB | 🔜 |
-| `earnings-analysis/` | Post-earnings quick take | 🔜 |
-| `stock-screening/` | Screen companies by financial criteria | 🔜 |
-| `portfolio-monitoring/` | Track holdings, P&L, alerts | 🔜 |
+| Skill | Purpose | Output Path | Status |
+|-------|---------|-------------|--------|
+| `company-profile/` | Generate 1-page markdown tearsheet for a company | `data/artifacts/{ticker}/profile/` | ✅ |
+| `etl-coverage/` | Audit ETL data coverage, find unmapped XBRL tags, diagnose NULLs | `data/artifacts/_etl/` | ✅ |
+| `thesis-tracker/` | Maintain and version investment thesis documents | `data/artifacts/{ticker}/thesis/` | ✅ |
+| `three-statements/` | 3-statement financial model in markdown | 🔜 | 🔜 |
+| `dcf-valuation/` | Simplified DCF model with sensitivity analysis | 🔜 | 🔜 |
+| `comps-analysis/` | Comparable company analysis from DB | 🔜 | 🔜 |
+| `earnings-analysis/` | Post-earnings quick take | 🔜 | 🔜 |
+| `stock-screening/` | Screen companies by financial criteria | 🔜 | 🔜 |
+| `portfolio-monitoring/` | Track holdings, P&L, alerts | 🔜 | 🔜 |
 
 ## Invoking a Skill
 
@@ -30,18 +30,26 @@ An agent (Claude Code, GitHub Copilot, etc.) reads the SKILL.md and follows its 
 ```
 Agent: "I need to create a company profile for NVDA"
 → Reads skills/company-profile/SKILL.md
-→ Follows Step 1: check if data exists in DB
-→ If not, triggers skills/financial-etl/SKILL.md first
-→ Follows Step 2-5: query DB, fill template, save
+→ Checks prerequisite: is data in MCP? (calls list_companies, get_company)
+→ If not, tells user to run ETL first
+→ Follows Task 1: Company Research (reads MCP + 10k_raw_sections.json)
+→ Follows Task 2: Financial Analysis (build_comps.py)
+→ Follows Task 3: Report Generation (generate_report.py)
+→ Artifacts saved to data/artifacts/NVDA/profile/
 ```
 
-## Database Connection
+## Data Access
 
-All skills that query data expect PostgreSQL at the URL in `.env`:
+Skills access financial data through the MCP server (`personal-finance`), which provides
+read-only access to PostgreSQL. The agent **never writes to PostgreSQL directly**.
+
+### Data Source Priority
+
 ```
-DATABASE_URL=postgresql://pfs:pfs_dev_2024@localhost:5432/personal_finance
+MCP (PostgreSQL) > local SEC files > Alpha Vantage > yfinance > web search
 ```
 
-Skills that write analysis reports save:
-1. Markdown file to `data/reports/{ticker}/`
-2. Record to `analysis_reports` table in PostgreSQL
+## Artifact Output
+
+All skills write to `data/artifacts/{ticker}/{skill}/`. Every JSON file must include
+`"schema_version": "1.0"`. Streamlit reads artifacts for display — it never writes.

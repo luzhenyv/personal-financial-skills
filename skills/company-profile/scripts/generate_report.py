@@ -1,19 +1,19 @@
 """
-Task 4: Generate Company Profile Report
+Task 3: Generate Company Profile Report
 ========================================
 Assembles a comprehensive markdown company profile from:
-  - data/artifacts/{TICKER}/*.json  (created by Tasks 2 & 3)
-  - PostgreSQL financial statements   (created by Task 1)
+  - data/artifacts/{TICKER}/profile/*.json  (created by Tasks 1 & 2)
+  - PostgreSQL financial statements          (via ETL pipeline)
 
 Saves the report to:
-  - data/reports/{TICKER}/company_profile.md  (filesystem)
-  - analysis_reports table                    (PostgreSQL)
+  - data/artifacts/{TICKER}/profile/company_profile.md  (filesystem)
+  - analysis_reports table                              (PostgreSQL)
 
 Usage:
     uv run python skills/company-profile/scripts/generate_report.py NVDA
     uv run python skills/company-profile/scripts/generate_report.py AAPL --price 225.50
 
-Required JSON files in data/artifacts/{TICKER}/:
+Required JSON files in data/artifacts/{TICKER}/profile/:
     company_overview.json       — business description, products, segments, geography
     management_team.json        — executives with bios
     risk_factors.json           — categorized risks from 10-K Item 1A
@@ -109,7 +109,7 @@ def query_financials(ticker: str, session, *, fiscal_year_end: str | None = None
     """Query all annual financial data for a ticker from PostgreSQL.
 
     Per-share fields (``eps_diluted``) are automatically split-adjusted to the
-    current share basis using ``data/artifacts/{TICKER}/stock_splits.json``.
+    current share basis using ``data/artifacts/{TICKER}/profile/stock_splits.json``.
     """
     from src.splits import get_split_adjustor
 
@@ -598,10 +598,10 @@ def section_appendix(ticker: str, processed_dir: Path) -> list[str]:
         "## Appendix: Data Sources", "",
         "| Section | Source |",
         "|---------|--------|",
-        "| Financial Statements | SEC EDGAR XBRL, via ETL pipeline → PostgreSQL |",
-        "| 10-K Sections | SEC EDGAR HTML filing, parsed by ingest.py |",
-        "| Management / Risks / Business | 10-K Item 1, 1A, 7, 10 (AI-parsed) |",
-        "| Market Data, Valuation | Yahoo Finance |",
+        "| Financial Statements | MCP (PostgreSQL) via ETL pipeline |",
+        "| 10-K Sections | SEC EDGAR HTML filing, parsed by section_extractor.py |",
+        "| Management / Risks / Business | 10-K Item 1, 1A, 7, 10 (AI-parsed via MCP) |",
+        "| Market Data, Valuation | Alpha Vantage / Yahoo Finance |",
         "| Comparable Companies | Yahoo Finance, build_comps.py |",
         "",
         f"*Processed files: {', '.join(sorted(files))}*",
@@ -614,15 +614,14 @@ def section_appendix(ticker: str, processed_dir: Path) -> list[str]:
 # ── Main ────────────────────────────────────────────────────────────────────────
 
 def main():
-    parser = argparse.ArgumentParser(description="Task 4: Generate company profile report")
+    parser = argparse.ArgumentParser(description="Task 3: Generate company profile report")
     parser.add_argument("ticker", help="Stock ticker, e.g. NVDA")
     parser.add_argument("--price", type=float, default=None, help="Override current price")
     args = parser.parse_args()
 
     ticker = args.ticker.upper()
-    processed_dir = Path(f"data/artifacts/{ticker}")
-    reports_dir = Path(f"data/reports/{ticker}")
-    reports_dir.mkdir(parents=True, exist_ok=True)
+    processed_dir = Path(f"data/artifacts/{ticker}/profile")
+    processed_dir.mkdir(parents=True, exist_ok=True)
 
     # ── Load all processed JSON files ──────────────────────────────────────────
     overview     = load_json(processed_dir / "company_overview.json")
@@ -670,7 +669,7 @@ def main():
         fin_data = []
 
     if not fin_data:
-        print(f"Warning: No financial data in DB for {ticker}. Run ingest.py first.")
+        print(f"Warning: No financial data in DB for {ticker}. Run ETL first: uv run python -m src.etl.pipeline ingest {ticker} --years 5")
 
     # ── Assemble report ────────────────────────────────────────────────────────
     all_sections: list[str] = []
@@ -702,7 +701,7 @@ def main():
     report_md = "\n".join(all_sections)
 
     # ── Save to filesystem ──────────────────────────────────────────────────────
-    out_path = reports_dir / "company_profile.md"
+    out_path = processed_dir / "company_profile.md"
     out_path.write_text(report_md)
     print(f"Saved: {out_path}  ({len(report_md):,} chars, {len(all_sections)} lines)")
 
@@ -730,7 +729,7 @@ def main():
     finally:
         session.close()
 
-    print(f"\n✓ Report complete: data/reports/{ticker}/company_profile.md")
+    print(f"\n✓ Report complete: data/artifacts/{ticker}/profile/company_profile.md")
     print(f"  View in Streamlit: http://localhost:8501")
 
 

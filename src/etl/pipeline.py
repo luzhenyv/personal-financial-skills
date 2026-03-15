@@ -67,9 +67,10 @@ def ingest_company(
         9.  Compute & store valuation metrics (needs price data)
         10. Fetch & store SEC filing history
         11. Download 10-K/10-Q filing HTML
-        12. Save stock split history
-        13. Run cross-source validation
-        14. Finalize audit record
+        12. Extract 10-K sections to profile artifact
+        13. Save stock split history
+        14. Run cross-source validation
+        15. Finalize audit record
 
     Returns:
         Summary dict with counts and status.
@@ -315,8 +316,21 @@ def ingest_company(
             summary["errors"].append(f"filing_download: {e}")
             logger.error(f"[{ticker}] Filing download failed: {e}")
 
-        # Step 12: Stock split history
-        logger.info(f"[{ticker}] Step 12: Saving stock split history")
+        # Step 12: Extract 10-K sections to profile artifact
+        logger.info(f"[{ticker}] Step 12: Extracting 10-K sections")
+        try:
+            from src.etl.section_extractor import extract_and_save
+            sections_path = extract_and_save(ticker)
+            if sections_path:
+                logger.info(f"[{ticker}] 10-K sections saved: {sections_path}")
+            else:
+                logger.warning(f"[{ticker}] No 10-K HTML found for section extraction")
+        except Exception as e:
+            summary["errors"].append(f"section_extraction: {e}")
+            logger.error(f"[{ticker}] Section extraction failed: {e}")
+
+        # Step 13: Stock split history
+        logger.info(f"[{ticker}] Step 13: Saving stock split history")
         try:
             splits = get_stock_splits(ticker)
             n_splits = 0
@@ -341,8 +355,8 @@ def ingest_company(
             summary["errors"].append(f"stock_splits: {e}")
             logger.error(f"[{ticker}] Stock splits failed: {e}")
 
-        # Step 13: Cross-source validation
-        logger.info(f"[{ticker}] Step 13: Cross-source validation")
+        # Step 14: Cross-source validation
+        logger.info(f"[{ticker}] Step 14: Cross-source validation")
         try:
             from src.etl.yfinance_client import get_key_financials
 
@@ -374,7 +388,7 @@ def ingest_company(
             summary["errors"].append(f"validation: {e}")
             logger.error(f"[{ticker}] Validation failed: {e}")
 
-        # Step 14: Finalize audit
+        # Step 15: Finalize audit
         status = "success" if not summary["errors"] else "partial"
 
     except Exception as e:

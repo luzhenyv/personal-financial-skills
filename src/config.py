@@ -43,6 +43,10 @@ class Settings(BaseSettings):
         """Return the artifacts directory for *ticker* (``data/artifacts/{ticker}``)."""
         return self.artifacts_dir / ticker
 
+    def ticker_profile_dir(self, ticker: str) -> Path:
+        """Return the profile artifacts directory (``data/artifacts/{ticker}/profile/``)."""
+        return self.artifacts_dir / ticker / "profile"
+
     @property
     def reports_dir(self) -> Path:
         return self.data_dir / "reports"

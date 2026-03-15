@@ -1,14 +1,18 @@
 # Quality Checks
 
-Run these checks after completing all 4 tasks for a given ticker.
+Run these checks after completing all 3 tasks for a given ticker.
+
+## Prerequisite: ETL Data
+
+- [ ] Company exists in MCP: `list_companies` shows the ticker
+- [ ] At least 3 years of annual data in MCP: `get_income_statements(ticker, years=3)` returns data
+- [ ] `data/raw/{TICKER}/10-K_*.htm` exists (raw annual filing downloaded by ETL)
 
 ## Data Completeness
 
-- [ ] `data/raw/{TICKER}/10-K_*.htm` exists (raw annual filing downloaded)
-- [ ] `data/artifacts/{TICKER}/10k_raw_sections.json` exists with non-empty sections
-- [ ] All 6 JSON files exist in `data/artifacts/{TICKER}/`
-- [ ] At least 3 years of annual data in all DB tables
-- [ ] Revenue figures in correct magnitude (billions vs millions — verify against XBRL)
+- [ ] `data/artifacts/{TICKER}/profile/10k_raw_sections.json` exists with non-empty sections
+- [ ] All 6 JSON files exist in `data/artifacts/{TICKER}/profile/`
+- [ ] Revenue figures in correct magnitude (billions vs millions — verify against MCP data)
 
 ## Stock Split Adjustment
 
@@ -28,10 +32,12 @@ Run these checks after completing all 4 tasks for a given ticker.
 - [ ] `comps_table.json` has actual data (not all N/A)
 - [ ] Risk factors sourced from Item 1A language
 - [ ] `investment_thesis.json` has 4–6 bull case items with data points
+- [ ] All JSON files include `"schema_version": "1.0"` field
 
 ## Output
 
-- [ ] Report saved to both filesystem and database
+- [ ] Report saved to `data/artifacts/{TICKER}/profile/company_profile.md`
+- [ ] Report saved to `analysis_reports` table in database
 
 ## Verification Query
 

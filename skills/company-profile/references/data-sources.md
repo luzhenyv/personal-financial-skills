@@ -2,14 +2,22 @@
 
 Maps each data field in the company profile to its source and storage location.
 
+## Data Source Priority (Fallback Chain)
+
+```
+1. MCP (PostgreSQL)     ← most trustworthy, already validated by ETL
+2. Local SEC files      ← data/raw/{ticker}/ 10-K/Q HTML for section text
+3. Alpha Vantage        ← conflict resolution, alternative data
+4. yfinance             ← supplemental price / basic fundamental data
+5. Web search           ← last resort for news, qualitative context
+```
+
 ## Data Flow
 
 ```
-SEC EDGAR → data/raw/{ticker}/ (10-K/Q PDFs, XBRL JSON)
-LLM parse → data/artifacts/{ticker}/ (structured JSON)
-ETL pipeline → PostgreSQL (financial tables)
-yfinance/Alpha Vantage → PostgreSQL (prices, market data)
-Web search → data/artifacts/{ticker}/ (competitive intel)
+MCP tools (PostgreSQL) → Agent reads structured data
+data/raw/{ticker}/ → Agent reads raw 10-K/Q HTML for section text
+Agent → data/artifacts/{ticker}/profile/ (structured JSON + report)
 ```
 
 ## Company Metadata
@@ -25,17 +33,17 @@ Web search → data/artifacts/{ticker}/ (competitive intel)
 | Description | 10-K Item 1 (LLM-parsed) | yfinance `longBusinessSummary` | `companies.description` |
 | Website | SEC Submissions API | yfinance | `companies.website` |
 | Market Cap | yfinance | Calculated: Price × Shares | `companies.market_cap` |
-| Employee Count | yfinance | 10-K Item 1 | `processed/{ticker}/company_overview.json` |
+| Employee Count | yfinance | 10-K Item 1 | `artifacts/{ticker}/profile/company_overview.json` |
 
 ## Management Team (NEW)
 
 | Field | Primary Source | Fallback | Storage |
 |-------|---------------|----------|---------|
-| Executive Names/Titles | 10-K Item 10 | DEF 14A Proxy | `processed/{ticker}/management_team.json` |
-| Bios & Background | DEF 14A + Web Search | LinkedIn, press | `processed/{ticker}/management_team.json` |
-| Compensation | DEF 14A Proxy | — | `processed/{ticker}/management_team.json` |
-| Insider Ownership | DEF 14A Proxy | yfinance | `processed/{ticker}/management_team.json` |
-| Board Composition | DEF 14A Proxy | 10-K | `processed/{ticker}/management_team.json` |
+| Executive Names/Titles | 10-K Item 10 | DEF 14A Proxy | `artifacts/{ticker}/profile/management_team.json` |
+| Bios & Background | DEF 14A + Web Search | LinkedIn, press | `artifacts/{ticker}/profile/management_team.json` |
+| Compensation | DEF 14A Proxy | — | `artifacts/{ticker}/profile/management_team.json` |
+| Insider Ownership | DEF 14A Proxy | yfinance | `artifacts/{ticker}/profile/management_team.json` |
+| Board Composition | DEF 14A Proxy | 10-K | `artifacts/{ticker}/profile/management_team.json` |
 
 ## Financial Statements
 
@@ -75,10 +83,10 @@ Web search → data/artifacts/{ticker}/ (competitive intel)
 
 | Field | Primary Source | Fallback | Storage |
 |-------|---------------|----------|---------|
-| Competitor Names | 10-K Item 1 (competitors mentioned) | Web search, agent knowledge | `processed/{ticker}/competitive_landscape.json` |
-| Market Share | Industry reports, web search | Agent estimate | `processed/{ticker}/competitive_landscape.json` |
-| Competitive Positioning | 10-K Item 1 + MD&A | Web search | `processed/{ticker}/competitive_landscape.json` |
-| TAM/SAM/SOM | Industry reports, 10-K | Web search | `processed/{ticker}/competitive_landscape.json` |
+| Competitor Names | 10-K Item 1 (competitors mentioned) | Web search, agent knowledge | `artifacts/{ticker}/profile/competitive_landscape.json` |
+| Market Share | Industry reports, web search | Agent estimate | `artifacts/{ticker}/profile/competitive_landscape.json` |
+| Competitive Positioning | 10-K Item 1 + MD&A | Web search | `artifacts/{ticker}/profile/competitive_landscape.json` |
+| TAM/SAM/SOM | Industry reports, 10-K | Web search | `artifacts/{ticker}/profile/competitive_landscape.json` |
 
 ## Comparable Company Analysis (NEW)
 
@@ -95,8 +103,8 @@ Web search → data/artifacts/{ticker}/ (competitive intel)
 
 | Field | Primary Source | Storage |
 |-------|---------------|---------|
-| Risk Factors | 10-K Item 1A | `processed/{ticker}/risk_factors.json` |
-| Opportunities | 10-K MD&A (Item 7), press releases | `processed/{ticker}/risk_factors.json` |
+| Risk Factors | 10-K Item 1A | `artifacts/{ticker}/profile/risk_factors.json` |
+| Opportunities | 10-K MD&A (Item 7), press releases | `artifacts/{ticker}/profile/risk_factors.json` |
 | Catalysts | Earnings calls, web search | In report directly |
 
 ## Price Data
@@ -125,14 +133,18 @@ All SEC APIs require `User-Agent` header with contact email and are rate-limited
 data/
 ├── raw/{ticker}/
 │   ├── company_facts.json          # XBRL structured data (from SEC API)
-│   ├── 10-K_FY2025.pdf             # Annual report PDF
-│   └── 10-Q_FY2025_Q3.pdf          # Quarterly report PDF
-├── processed/{ticker}/
-│   ├── company_overview.json        # LLM-parsed business description
-│   ├── management_team.json         # LLM-parsed executive bios
-│   ├── risk_factors.json            # LLM-parsed risks + opportunities
-│   ├── competitive_landscape.json   # Competitors, moat, market position
-│   └── financial_segments.json      # Revenue by segment/geography
-└── reports/{ticker}/
-    └── company_profile.md           # Final generated report
+│   ├── 10-K_2026_01.htm            # Annual report HTML
+│   └── 10-Q_2025_09.htm            # Quarterly report HTML
+├── artifacts/{ticker}/
+│   └── profile/
+│       ├── 10k_raw_sections.json    # Extracted section text (by ETL)
+│       ├── stock_splits.json        # Split history (by ETL)
+│       ├── company_overview.json    # AI-parsed business description
+│       ├── management_team.json     # AI-parsed executive bios
+│       ├── risk_factors.json        # AI-parsed risks + opportunities
+│       ├── competitive_landscape.json # Competitors, moat, market position
+│       ├── financial_segments.json  # Revenue by segment/geography
+│       ├── investment_thesis.json   # Bull case + opportunities
+│       ├── comps_table.json         # Comparable company analysis
+│       └── company_profile.md       # Final generated report
 ```

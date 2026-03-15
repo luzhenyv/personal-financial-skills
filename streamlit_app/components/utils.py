@@ -11,18 +11,19 @@ from pathlib import Path
 # File loaders
 # ──────────────────────────────────────────────
 
-def load_json(ticker: str, filename: str, base: str = "data/artifacts") -> dict | None:
+def load_json(ticker: str, filename: str, base: str = "data/artifacts", subdir: str = "") -> dict | None:
     """Load an artifact JSON file for a ticker.
 
     Args:
         ticker: Company ticker symbol (e.g. ``"NVDA"``).
         filename: JSON filename inside the artifacts folder (e.g. ``"company_overview.json"``).
         base: Base directory relative to the CWD. Defaults to ``"data/artifacts"``.
+        subdir: Optional subdirectory under ``<base>/<ticker>/`` (e.g. ``"profile"``).
 
     Returns:
         Parsed dict, or ``None`` if the file does not exist.
     """
-    path = Path(base) / ticker / filename
+    path = Path(base) / ticker / subdir / filename
     if path.exists():
         return json.loads(path.read_text(encoding="utf-8"))
     return None
@@ -33,14 +34,18 @@ def load_report_md(ticker: str, filename: str = "company_profile.md") -> str | N
 
     Args:
         ticker: Company ticker symbol.
-        filename: Markdown filename inside ``data/reports/<ticker>/``.
+        filename: Markdown filename. Checks ``data/artifacts/<ticker>/profile/`` first,
+            then falls back to ``data/reports/<ticker>/``.
 
     Returns:
         Report text, or ``None`` if the file does not exist.
     """
-    path = Path("data/reports") / ticker / filename
-    if path.exists():
-        return path.read_text(encoding="utf-8")
+    profile_path = Path("data/artifacts") / ticker / "profile" / filename
+    if profile_path.exists():
+        return profile_path.read_text(encoding="utf-8")
+    legacy_path = Path("data/reports") / ticker / filename
+    if legacy_path.exists():
+        return legacy_path.read_text(encoding="utf-8")
     return None
 
 

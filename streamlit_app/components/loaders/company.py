@@ -109,13 +109,13 @@ def load_company_page_data(ticker: str) -> CompanyPageData | None:
         _db.close()
 
     # JSON profile files
-    data.overview = load_json(ticker, "company_overview.json")
-    data.management = load_json(ticker, "management_team.json")
-    data.risks = load_json(ticker, "risk_factors.json")
-    data.competitive = load_json(ticker, "competitive_landscape.json")
-    data.segments = load_json(ticker, "financial_segments.json")
-    data.thesis = load_json(ticker, "investment_thesis.json")
-    data.comps = load_json(ticker, "comps_table.json")
+    data.overview = load_json(ticker, "company_overview.json", subdir="profile")
+    data.management = load_json(ticker, "management_team.json", subdir="profile")
+    data.risks = load_json(ticker, "risk_factors.json", subdir="profile")
+    data.competitive = load_json(ticker, "competitive_landscape.json", subdir="profile")
+    data.segments = load_json(ticker, "financial_segments.json", subdir="profile")
+    data.thesis = load_json(ticker, "investment_thesis.json", subdir="profile")
+    data.comps = load_json(ticker, "comps_table.json", subdir="profile")
     data.report_md = load_report_md(ticker)
 
     data.has_profile = any([

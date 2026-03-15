@@ -156,6 +156,6 @@
 
 ---
 
-**Data Sources**: SEC EDGAR 10-K/Q (primary), yfinance, Alpha Vantage, web search
-**Raw Filings**: `data/raw/{ticker}/` | **Artifacts**: `data/artifacts/{ticker}/`
+**Data Sources**: MCP (PostgreSQL primary), local SEC filings, Alpha Vantage, yfinance, web search
+**Artifacts**: `data/artifacts/{ticker}/profile/`
 *Generated on {generation_date} | View interactive dashboard: http://localhost:8501*

@@ -73,10 +73,10 @@ Alpha Vantage┘    raw/ filesystem              fundamentals, metrics, etl_audi
 When the Agent fetches data, it follows this priority order:
 
 ```
-MCP (PostgreSQL) > raw SEC parse > yfinance > Alpha Vantage > web search
+MCP (PostgreSQL) > local SEC files > Alpha Vantage > yfinance > web search
 ```
 
-MCP-sourced data is the most trustworthy — it has already been validated and conflict-resolved during ETL. Raw SEC files are the fallback when structured data is missing. Web search is the last resort.
+MCP-sourced data is the most trustworthy — it has already been validated and conflict-resolved during ETL. Local SEC files (in `data/raw/`) are the fallback when structured data is missing. Alpha Vantage provides reliable market data, followed by yfinance. Web search is the last resort.
 
 ---
 
