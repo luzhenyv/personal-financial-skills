@@ -52,6 +52,7 @@ class Company(Base):
     daily_prices = relationship("DailyPrice", back_populates="company")
     sec_filings = relationship("SecFiling", back_populates="company")
     analysis_reports = relationship("AnalysisReport", back_populates="company")
+    stock_splits = relationship("StockSplit", back_populates="company", order_by="StockSplit.split_date")
 
 
 
@@ -292,6 +293,20 @@ class AnalysisReport(Base):
     company = relationship("Company", back_populates="analysis_reports")
 
 
+class StockSplit(Base):
+    __tablename__ = "stock_splits"
+    __table_args__ = (UniqueConstraint("ticker", "split_date"),)
+
+    id = Column(Integer, primary_key=True)
+    ticker = Column(String(10), ForeignKey("companies.ticker"), nullable=False)
+    split_date = Column(Date, nullable=False)
+    ratio = Column(Numeric(10, 4), nullable=False)
+    source = Column(String(50), default="yfinance")
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    company = relationship("Company", back_populates="stock_splits")
+
+
 class Watchlist(Base):
     __tablename__ = "watchlist"
 
@@ -328,5 +343,6 @@ class EtlRun(Base):
     daily_prices = Column(Integer, default=0)
     sec_filings = Column(Integer, default=0)
     filings_downloaded = Column(Integer, default=0)
+    stock_splits = Column(Integer, default=0)
     errors = Column(JSONB, default=list)
     run_metadata = Column("metadata", JSONB, default=dict)

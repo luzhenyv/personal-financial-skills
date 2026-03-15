@@ -252,6 +252,20 @@ CREATE TABLE sec_filings (
 );
 
 -- ============================================
+-- STOCK SPLITS
+-- ============================================
+
+CREATE TABLE stock_splits (
+    id SERIAL PRIMARY KEY,
+    ticker VARCHAR(10) NOT NULL REFERENCES companies(ticker),
+    split_date DATE NOT NULL,
+    ratio NUMERIC(10,4) NOT NULL,
+    source VARCHAR(50) DEFAULT 'yfinance',
+    created_at TIMESTAMP DEFAULT NOW(),
+    UNIQUE(ticker, split_date)
+);
+
+-- ============================================
 -- WATCHLIST
 -- ============================================
 
@@ -274,6 +288,7 @@ CREATE INDEX idx_balance_ticker_year ON balance_sheets(ticker, fiscal_year);
 CREATE INDEX idx_cashflow_ticker_year ON cash_flow_statements(ticker, fiscal_year);
 CREATE INDEX idx_metrics_ticker_year ON financial_metrics(ticker, fiscal_year);
 CREATE INDEX idx_prices_ticker_date ON daily_prices(ticker, date);
+CREATE INDEX idx_splits_ticker ON stock_splits(ticker, split_date);
 CREATE INDEX idx_reports_ticker_type ON analysis_reports(ticker, report_type);
 CREATE INDEX idx_filings_ticker ON sec_filings(ticker, filing_type);
 CREATE INDEX idx_rev_segments_ticker ON revenue_segments(ticker, fiscal_year);
@@ -298,6 +313,7 @@ CREATE TABLE etl_runs (
     daily_prices INT DEFAULT 0,
     sec_filings INT DEFAULT 0,
     filings_downloaded INT DEFAULT 0,
+    stock_splits INT DEFAULT 0,
     errors JSONB DEFAULT '[]',
     metadata JSONB DEFAULT '{}'
 );

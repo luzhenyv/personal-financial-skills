@@ -31,6 +31,7 @@ from src.db.models import (
     IncomeStatement,
     RevenueSegment,
     SecFiling,
+    StockSplit,
 )
 from src.db.session import get_session
 from src.etl import sec_client, xbrl_parser
@@ -90,6 +91,7 @@ def ingest_company(
         "daily_prices": 0,
         "sec_filings": 0,
         "filings_downloaded": 0,
+        "stock_splits": 0,
     }
 
     # Step 1: Audit record
@@ -315,12 +317,24 @@ def ingest_company(
         logger.info(f"[{ticker}] Step 12: Saving stock split history")
         try:
             splits = get_stock_splits(ticker)
-            if splits:
-                split_dir = settings.ticker_artifacts_dir(ticker)
-                split_dir.mkdir(parents=True, exist_ok=True)
-                split_path = split_dir / "stock_splits.json"
-                split_path.write_text(json.dumps(splits, indent=2, default=str))
-                logger.info(f"[{ticker}] Stock splits saved: {len(splits)} events")
+            n_splits = 0
+            for s in splits:
+                existing = db.query(StockSplit).filter_by(
+                    ticker=ticker, split_date=s["date"]
+                ).first()
+                if existing is None:
+                    db.add(StockSplit(
+                        ticker=ticker,
+                        split_date=s["date"],
+                        ratio=s["ratio"],
+                        source="yfinance",
+                    ))
+                    n_splits += 1
+                else:
+                    existing.ratio = s["ratio"]
+            db.commit()
+            counts["stock_splits"] = n_splits
+            logger.info(f"[{ticker}] Stock splits saved: {len(splits)} total, {n_splits} new")
         except Exception as e:
             summary["errors"].append(f"stock_splits: {e}")
             logger.error(f"[{ticker}] Stock splits failed: {e}")
@@ -377,6 +391,7 @@ def ingest_company(
         etl_run.daily_prices = counts["daily_prices"]
         etl_run.sec_filings = counts["sec_filings"]
         etl_run.filings_downloaded = counts["filings_downloaded"]
+        etl_run.stock_splits = counts["stock_splits"]
         etl_run.errors = summary["errors"] if summary["errors"] else []
         etl_run.run_metadata = {
             "years": years,

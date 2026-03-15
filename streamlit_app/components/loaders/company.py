@@ -94,14 +94,19 @@ def load_company_page_data(ticker: str) -> CompanyPageData | None:
 
     # ── Split-adjust per-share metrics to current share basis ──
     from src.splits import get_split_adjustor
+    from src.db.session import get_session
 
     fye = company.get("fiscal_year_end")  # e.g. "0131"
-    adjust = get_split_adjustor(ticker, fiscal_year_end=fye)
-    for inc in data.incomes:
-        fy = inc.get("fiscal_year")
-        if fy is not None:
-            inc["eps_diluted"] = adjust(fy, inc.get("eps_diluted"))
-            inc["eps_basic"] = adjust(fy, inc.get("eps_basic"))
+    _db = get_session()
+    try:
+        adjust = get_split_adjustor(ticker, fiscal_year_end=fye, db=_db)
+        for inc in data.incomes:
+            fy = inc.get("fiscal_year")
+            if fy is not None:
+                inc["eps_diluted"] = adjust(fy, inc.get("eps_diluted"))
+                inc["eps_basic"] = adjust(fy, inc.get("eps_basic"))
+    finally:
+        _db.close()
 
     # JSON profile files
     data.overview = load_json(ticker, "company_overview.json")

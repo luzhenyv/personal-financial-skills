@@ -166,7 +166,7 @@ def query_financials(ticker: str, session, *, fiscal_year_end: str | None = None
     results = [dict(r) for r in rows]
 
     # Split-adjust per-share metrics to current share basis
-    adjust = get_split_adjustor(ticker, fiscal_year_end=fiscal_year_end)
+    adjust = get_split_adjustor(ticker, fiscal_year_end=fiscal_year_end, db=session)
     for d in results:
         fy = d.get("fiscal_year")
         if fy is not None:

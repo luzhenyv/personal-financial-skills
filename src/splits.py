@@ -1,39 +1,44 @@
 """Stock-split adjustment utilities.
 
-Reads ``data/artifacts/{TICKER}/stock_splits.json`` and computes cumulative
-split factors so that per-share metrics from different filing eras can be
-restated to the **current** share basis.
+Reads split history from the ``stock_splits`` table in PostgreSQL and computes
+cumulative split factors so that per-share metrics from different filing eras
+can be restated to the **current** share basis.
 
 Usage::
 
     from src.splits import get_split_adjustor
+    from src.db.session import get_session
 
-    adjust = get_split_adjustor("NVDA", fiscal_year_end="0131")
+    db = get_session()
+    adjust = get_split_adjustor("NVDA", fiscal_year_end="0131", db=db)
     adjusted_eps = adjust(fiscal_year=2024, value=11.93)  # → 1.193
+    db.close()
 """
 
 from __future__ import annotations
 
-import json
 from datetime import date
-from pathlib import Path
-from typing import Callable
+from typing import TYPE_CHECKING, Callable
+
+if TYPE_CHECKING:
+    from sqlalchemy.orm import Session
 
 
-def load_splits(ticker: str, base: str = "data/artifacts") -> list[dict]:
-    """Load the split history for *ticker* from the artifacts JSON file.
+def load_splits_from_db(ticker: str, db: "Session") -> list[dict]:
+    """Load the split history for *ticker* from the database.
 
-    Returns a list of ``{"date": "YYYY-MM-DD", "ratio": <int|float>}`` dicts,
-    sorted ascending by date.  Returns ``[]`` if the file does not exist.
+    Returns a list of ``{"date": "YYYY-MM-DD", "ratio": <float>}`` dicts,
+    sorted ascending by date.  Returns ``[]`` if no splits are recorded.
     """
-    path = Path(base) / ticker / "stock_splits.json"
-    if not path.exists():
-        return []
-    try:
-        data = json.loads(path.read_text(encoding="utf-8"))
-        return sorted(data.get("splits", []), key=lambda s: s["date"])
-    except Exception:
-        return []
+    from src.db.models import StockSplit
+
+    rows = (
+        db.query(StockSplit)
+        .filter(StockSplit.ticker == ticker)
+        .order_by(StockSplit.split_date)
+        .all()
+    )
+    return [{"date": str(row.split_date), "ratio": float(row.ratio)} for row in rows]
 
 
 def cumulative_split_factor(
@@ -67,7 +72,7 @@ def get_split_adjustor(
     ticker: str,
     fiscal_year_end: str | None = None,
     *,
-    base: str = "data/artifacts",
+    db: "Session",
 ) -> Callable[[int, float | None], float | None]:
     """Return a function ``adjust(fiscal_year, value) -> adjusted_value``.
 
@@ -78,9 +83,9 @@ def get_split_adjustor(
     Args:
         ticker: Upper-case ticker symbol.
         fiscal_year_end: ``"MMDD"`` string (e.g. ``"0131"`` for January 31).
-        base: Root directory containing ``{ticker}/stock_splits.json``.
+        db: Open SQLAlchemy session used to query ``stock_splits``.
     """
-    splits = load_splits(ticker, base=base)
+    splits = load_splits_from_db(ticker, db)
     month, day = _parse_fiscal_year_end(fiscal_year_end)
 
     # Pre-compute factors per fiscal year we might encounter (cache)
