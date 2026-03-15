@@ -15,6 +15,7 @@ Each skill is a self-contained directory with:
 |-------|---------|--------|
 | `company-profile/` | Generate 1-page markdown tearsheet for a company | ✅ |
 | `financial-etl/` | Fetch SEC XBRL data → parse → store in PostgreSQL | ✅ |
+| `etl-coverage/` | Audit ETL data coverage, find unmapped XBRL tags, diagnose NULLs | ✅ |
 | `three-statements/` | 3-statement financial model in markdown | 🔜 |
 | `dcf-valuation/` | Simplified DCF model with sensitivity analysis | 🔜 |
 | `comps-analysis/` | Comparable company analysis from DB | 🔜 |
