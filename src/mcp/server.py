@@ -1,4 +1,4 @@
-"""MCP Server — read-only data tools for Claude agent.
+"""MCP Server — data tools for Claude agent.
 
 Run:
     uv run python -m src.mcp.server
@@ -12,6 +12,7 @@ from mcp.server.fastmcp import FastMCP
 
 from src.config import settings
 from src.db.models import (
+    AnalysisReport,
     BalanceSheet,
     CashFlowStatement,
     Company,
@@ -20,6 +21,7 @@ from src.db.models import (
     IncomeStatement,
     RevenueSegment,
     SecFiling,
+    StockSplit,
 )
 from src.db.session import SessionLocal
 
@@ -233,6 +235,174 @@ def get_filing_content(ticker: str, filing_id: int) -> str:
             return resp.text
 
         return "Error: Filing content not available"
+    finally:
+        session.close()
+
+
+@mcp.tool()
+def get_stock_splits(ticker: str) -> list[dict[str, Any]]:
+    """Get stock split history for a company.
+
+    Returns a list of splits sorted by date, each with 'date', 'ratio', and
+    'source' fields.  Returns an empty list if no splits are recorded.
+    """
+    session = _get_session()
+    try:
+        rows = (
+            session.query(StockSplit)
+            .filter(StockSplit.ticker == ticker.upper())
+            .order_by(StockSplit.split_date)
+            .all()
+        )
+        return [
+            {
+                "date": str(row.split_date),
+                "ratio": float(row.ratio),
+                "source": row.source,
+            }
+            for row in rows
+        ]
+    finally:
+        session.close()
+
+
+@mcp.tool()
+def get_annual_financials(ticker: str, years: int = 5) -> dict[str, Any]:
+    """Get combined annual financial data with split-adjusted per-share metrics.
+
+    Joins income statements, balance sheets, cash flows, and financial metrics
+    into a single response.  EPS is automatically adjusted to the current share
+    basis using the stock_splits table.
+
+    Returns a dict with 'ticker', 'fiscal_year_end', and 'years' (list of
+    annual records, oldest first).
+    """
+    from sqlalchemy import text as sa_text
+
+    from src.splits import get_split_adjustor
+
+    session = _get_session()
+    try:
+        # Resolve fiscal-year-end code for split adjustment
+        company = session.query(Company).filter(Company.ticker == ticker.upper()).first()
+        fye_code = company.fiscal_year_end if company else None
+
+        rows = session.execute(sa_text("""
+            SELECT
+                i.fiscal_year,
+                i.filing_date,
+                i.revenue          / 1e9 AS rev_b,
+                i.gross_profit     / 1e9 AS gp_b,
+                i.operating_income / 1e9 AS oi_b,
+                i.net_income       / 1e9 AS ni_b,
+                i.eps_diluted,
+                i.research_and_development / 1e9 AS rd_b,
+                i.shares_diluted   / 1e9 AS shares_b,
+                cf.free_cash_flow  / 1e9 AS fcf_b,
+                cf.capital_expenditure / 1e9 AS capex_b,
+                cf.stock_based_compensation / 1e9 AS sbc_b,
+                cf.share_repurchase / 1e9 AS buyback_b,
+                m.gross_margin     * 100 AS gm_pct,
+                m.operating_margin * 100 AS om_pct,
+                m.net_margin       * 100 AS nm_pct,
+                m.fcf_margin       * 100 AS fcf_margin_pct,
+                m.revenue_growth   * 100 AS rev_growth_pct,
+                m.eps_growth       * 100 AS eps_growth_pct,
+                m.roe  * 100 AS roe_pct,
+                m.roa  * 100 AS roa_pct,
+                m.roic * 100 AS roic_pct,
+                m.current_ratio,
+                m.debt_to_equity,
+                m.pe_ratio,
+                b.cash_and_equivalents    / 1e9 AS cash_b,
+                b.short_term_investments  / 1e9 AS sti_b,
+                b.accounts_receivable     / 1e9 AS ar_b,
+                b.inventory               / 1e9 AS inv_b,
+                b.total_current_assets    / 1e9 AS cur_assets_b,
+                b.total_assets            / 1e9 AS assets_b,
+                b.short_term_debt         / 1e9 AS std_b,
+                b.long_term_debt          / 1e9 AS ltd_b,
+                b.total_current_liabilities / 1e9 AS cur_liab_b,
+                b.total_stockholders_equity / 1e9 AS equity_b
+            FROM income_statements i
+            JOIN financial_metrics m
+                ON i.ticker = m.ticker AND i.fiscal_year = m.fiscal_year
+                AND m.fiscal_quarter IS NULL
+            JOIN cash_flow_statements cf
+                ON i.ticker = cf.ticker AND i.fiscal_year = cf.fiscal_year
+                AND cf.fiscal_quarter IS NULL
+            JOIN balance_sheets b
+                ON i.ticker = b.ticker AND i.fiscal_year = b.fiscal_year
+                AND b.fiscal_quarter IS NULL
+            WHERE i.ticker = :ticker AND i.fiscal_quarter IS NULL
+            ORDER BY i.fiscal_year DESC
+            LIMIT :years
+        """), {"ticker": ticker.upper(), "years": years}).mappings().all()
+
+        results = [dict(r) for r in reversed(rows)]
+
+        # Split-adjust per-share metrics
+        adjust = get_split_adjustor(ticker.upper(), fiscal_year_end=fye_code, db=session)
+        for d in results:
+            fy = d.get("fiscal_year")
+            if fy is not None:
+                d["eps_diluted"] = adjust(fy, d.get("eps_diluted"))
+            # Convert any remaining non-JSON-native types
+            for k, v in d.items():
+                if hasattr(v, "isoformat"):
+                    d[k] = v.isoformat()
+                elif isinstance(v, __import__("decimal").Decimal):
+                    d[k] = float(v)
+
+        return {
+            "ticker": ticker.upper(),
+            "fiscal_year_end": fye_code,
+            "years": results,
+        }
+    finally:
+        session.close()
+
+
+@mcp.tool()
+def save_analysis_report(
+    ticker: str,
+    report_type: str,
+    title: str,
+    content_md: str,
+    file_path: str,
+) -> dict[str, Any]:
+    """Upsert an analysis report into the database.
+
+    Replaces any existing report with the same ticker + report_type.
+
+    Args:
+        ticker: Stock ticker symbol.
+        report_type: Report category, e.g. 'company_profile'.
+        title: Human-readable report title.
+        content_md: Full markdown content of the report.
+        file_path: Filesystem path where the report is also saved.
+    """
+    session = _get_session()
+    try:
+        session.query(AnalysisReport).filter(
+            AnalysisReport.ticker == ticker.upper(),
+            AnalysisReport.report_type == report_type,
+        ).delete()
+
+        report = AnalysisReport(
+            ticker=ticker.upper(),
+            report_type=report_type,
+            title=title,
+            content_md=content_md,
+            generated_by="claude",
+            file_path=file_path,
+        )
+        session.add(report)
+        session.commit()
+        return {"status": "ok", "ticker": ticker.upper(), "report_type": report_type}
+    except Exception as e:
+        session.rollback()
+        return {"error": str(e)}
     finally:
         session.close()
 

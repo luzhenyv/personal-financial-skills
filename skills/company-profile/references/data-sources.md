@@ -138,7 +138,7 @@ data/
 ├── artifacts/{ticker}/
 │   └── profile/
 │       ├── 10k_raw_sections.json    # Extracted section text (by ETL)
-│       ├── stock_splits.json        # Split history (by ETL)
+│       ├── financial_data.json      # Combined financials, split-adjusted (agent via MCP)
 │       ├── company_overview.json    # AI-parsed business description
 │       ├── management_team.json     # AI-parsed executive bios
 │       ├── risk_factors.json        # AI-parsed risks + opportunities

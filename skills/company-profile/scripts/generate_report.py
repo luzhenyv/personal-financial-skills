@@ -2,12 +2,17 @@
 Task 3: Generate Company Profile Report
 ========================================
 Assembles a comprehensive markdown company profile from:
-  - data/artifacts/{TICKER}/profile/*.json  (created by Tasks 1 & 2)
-  - PostgreSQL financial statements          (via ETL pipeline)
+  - data/artifacts/{TICKER}/profile/*.json  (created by Tasks 1 & 2 + agent pre-step)
+
+All data must be pre-written as JSON artifacts before running this script.
+The agent is responsible for calling MCP tools and writing:
+  - financial_data.json   (via MCP get_annual_financials)
+
+After the report is written, the agent should call MCP save_analysis_report
+to persist the report in the database.
 
 Saves the report to:
   - data/artifacts/{TICKER}/profile/company_profile.md  (filesystem)
-  - analysis_reports table                              (PostgreSQL)
 
 Usage:
     uv run python skills/company-profile/scripts/generate_report.py NVDA
@@ -21,21 +26,18 @@ Required JSON files in data/artifacts/{TICKER}/profile/:
     financial_segments.json     — revenue by segment/geography
     investment_thesis.json      — bull case bullets and opportunities
     comps_table.json            — comparable company analysis (from build_comps.py)
+    financial_data.json         — annual financials with split-adjusted EPS (from MCP)
 """
 
 from __future__ import annotations
 
 import argparse
 import json
-import statistics
 from datetime import date
 from pathlib import Path
 from typing import Any
 
-from sqlalchemy import text
-
-from src.db.session import get_session
-from src.etl.yfinance_client import get_current_price, get_stock_info
+import yfinance as yf
 
 
 # ── Formatting helpers ─────────────────────────────────────────────────────────
@@ -105,74 +107,44 @@ def load_json(path: Path) -> dict | list:
         return {}
 
 
-def query_financials(ticker: str, session, *, fiscal_year_end: str | None = None) -> list[dict]:
-    """Query all annual financial data for a ticker from PostgreSQL.
+def get_current_price(ticker: str) -> float | None:
+    """Get the latest closing price via yfinance."""
+    try:
+        hist = yf.Ticker(ticker).history(period="1d")
+        if not hist.empty:
+            return float(hist["Close"].iloc[-1])
+    except Exception:
+        pass
+    return None
 
-    Per-share fields (``eps_diluted``) are automatically split-adjusted to the
-    current share basis using ``data/artifacts/{TICKER}/profile/stock_splits.json``.
+
+def get_stock_info(ticker: str) -> dict[str, Any]:
+    """Get key stock info from yfinance for valuation header."""
+    try:
+        info = yf.Ticker(ticker).info
+        return {
+            "name": info.get("longName") or info.get("shortName", ""),
+            "sector": info.get("sector", ""),
+            "industry": info.get("industry", ""),
+            "market_cap": info.get("marketCap"),
+            "pe_forward": info.get("forwardPE"),
+            "ev_to_ebitda": info.get("enterpriseToEbitda"),
+            "exchange": info.get("exchange", ""),
+        }
+    except Exception:
+        return {}
+
+
+def load_financial_data(processed_dir: Path) -> list[dict]:
+    """Load split-adjusted financial data from the JSON artifact.
+
+    The agent must write ``financial_data.json`` (via MCP ``get_annual_financials``)
+    before running this script.
     """
-    from src.splits import get_split_adjustor
-
-    rows = session.execute(text("""
-        SELECT
-            i.fiscal_year,
-            i.filing_date,
-            i.revenue          / 1e9 AS rev_b,
-            i.gross_profit     / 1e9 AS gp_b,
-            i.operating_income / 1e9 AS oi_b,
-            i.net_income       / 1e9 AS ni_b,
-            i.eps_diluted,
-            i.research_and_development / 1e9 AS rd_b,
-            i.shares_diluted   / 1e9 AS shares_b,
-            cf.free_cash_flow  / 1e9 AS fcf_b,
-            cf.capital_expenditure / 1e9 AS capex_b,
-            cf.stock_based_compensation / 1e9 AS sbc_b,
-            cf.share_repurchase / 1e9 AS buyback_b,
-            m.gross_margin     * 100 AS gm_pct,
-            m.operating_margin * 100 AS om_pct,
-            m.net_margin       * 100 AS nm_pct,
-            m.fcf_margin       * 100 AS fcf_margin_pct,
-            m.revenue_growth   * 100 AS rev_growth_pct,
-            m.eps_growth       * 100 AS eps_growth_pct,
-            m.roe  * 100 AS roe_pct,
-            m.roa  * 100 AS roa_pct,
-            m.roic * 100 AS roic_pct,
-            m.current_ratio,
-            m.debt_to_equity,
-            m.pe_ratio,
-            b.cash_and_equivalents    / 1e9 AS cash_b,
-            b.short_term_investments  / 1e9 AS sti_b,
-            b.accounts_receivable     / 1e9 AS ar_b,
-            b.inventory               / 1e9 AS inv_b,
-            b.total_current_assets    / 1e9 AS cur_assets_b,
-            b.total_assets            / 1e9 AS assets_b,
-            b.short_term_debt         / 1e9 AS std_b,
-            b.long_term_debt          / 1e9 AS ltd_b,
-            b.total_current_liabilities / 1e9 AS cur_liab_b,
-            b.total_stockholders_equity / 1e9 AS equity_b
-        FROM income_statements i
-        JOIN financial_metrics m
-            ON i.ticker = m.ticker AND i.fiscal_year = m.fiscal_year
-            AND m.fiscal_quarter IS NULL
-        JOIN cash_flow_statements cf
-            ON i.ticker = cf.ticker AND i.fiscal_year = cf.fiscal_year
-            AND cf.fiscal_quarter IS NULL
-        JOIN balance_sheets b
-            ON i.ticker = b.ticker AND i.fiscal_year = b.fiscal_year
-            AND b.fiscal_quarter IS NULL
-        WHERE i.ticker = :ticker AND i.fiscal_quarter IS NULL
-        ORDER BY i.fiscal_year
-    """), {"ticker": ticker}).mappings().all()
-    results = [dict(r) for r in rows]
-
-    # Split-adjust per-share metrics to current share basis
-    adjust = get_split_adjustor(ticker, fiscal_year_end=fiscal_year_end, db=session)
-    for d in results:
-        fy = d.get("fiscal_year")
-        if fy is not None:
-            d["eps_diluted"] = adjust(fy, d.get("eps_diluted"))
-
-    return results
+    data = load_json(processed_dir / "financial_data.json")
+    if isinstance(data, dict):
+        return data.get("years", [])
+    return []
 
 
 # ── Report sections ────────────────────────────────────────────────────────────
@@ -632,6 +604,15 @@ def main():
     thesis       = load_json(processed_dir / "investment_thesis.json")
     comps_data   = load_json(processed_dir / "comps_table.json")
 
+    # ── Load financial data from JSON artifact (written by agent via MCP) ──────
+    fin_data = load_financial_data(processed_dir)
+    if not fin_data:
+        print(
+            f"Warning: No financial_data.json for {ticker}. "
+            f"The agent must call MCP get_annual_financials and write "
+            f"data/artifacts/{ticker}/profile/financial_data.json before running this script."
+        )
+
     # ── Fetch market data ──────────────────────────────────────────────────────
     price = args.price or get_current_price(ticker)
     info = get_stock_info(ticker)
@@ -642,34 +623,9 @@ def main():
     company_name = overview.get("company_name") or info.get("name") or ticker
 
     # ── Company metadata ───────────────────────────────────────────────────────
-    # Try to get from overview, fall back to info
     cik = overview.get("cik", "N/A")
-    filing_info = overview.get("source") or f"SEC EDGAR 10-K (latest)"
+    filing_info = overview.get("source") or "SEC EDGAR 10-K (latest)"
     fiscal_year_end = overview.get("fiscal_year_end", "December")
-
-    # ── Query PostgreSQL financial data ────────────────────────────────────────
-    session = get_session()
-
-    # Resolve fiscal-year-end code for split adjustment (e.g. "0131" for Jan 31)
-    fye_code: str | None = None
-    try:
-        row = session.execute(
-            text("SELECT fiscal_year_end FROM companies WHERE ticker = :t"),
-            {"t": ticker},
-        ).fetchone()
-        if row:
-            fye_code = row[0]
-    except Exception:
-        pass
-
-    try:
-        fin_data = query_financials(ticker, session, fiscal_year_end=fye_code)
-    except Exception as e:
-        print(f"Warning: DB query failed: {e}")
-        fin_data = []
-
-    if not fin_data:
-        print(f"Warning: No financial data in DB for {ticker}. Run ETL first: uv run python -m src.etl.pipeline ingest {ticker} --years 5")
 
     # ── Assemble report ────────────────────────────────────────────────────────
     all_sections: list[str] = []
@@ -705,32 +661,9 @@ def main():
     out_path.write_text(report_md)
     print(f"Saved: {out_path}  ({len(report_md):,} chars, {len(all_sections)} lines)")
 
-    # ── Upsert to PostgreSQL ────────────────────────────────────────────────────
-    try:
-        # Delete existing first (no unique constraint on analysis_reports by default)
-        session.execute(text(
-            "DELETE FROM analysis_reports WHERE ticker=:t AND report_type='company_profile'"
-        ), {"t": ticker})
-        session.execute(text("""
-            INSERT INTO analysis_reports (ticker, report_type, title, content_md, generated_by, file_path)
-            VALUES (:ticker, :rtype, :title, :content, 'claude', :path)
-        """), {
-            "ticker": ticker,
-            "rtype": "company_profile",
-            "title": f"{company_name} Company Profile",
-            "content": report_md,
-            "path": str(out_path.resolve()),
-        })
-        session.commit()
-        print(f"Saved to analysis_reports table (ticker={ticker}, report_type=company_profile)")
-    except Exception as e:
-        print(f"DB save warning: {e}")
-        session.rollback()
-    finally:
-        session.close()
-
     print(f"\n✓ Report complete: data/artifacts/{ticker}/profile/company_profile.md")
     print(f"  View in Streamlit: http://localhost:8501")
+    print(f"  To persist in DB, call MCP save_analysis_report from the agent.")
 
 
 if __name__ == "__main__":

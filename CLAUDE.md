@@ -28,7 +28,7 @@ Plane 3 · PRESENTATION PLANE (Streamlit)
 
 ## MCP Server
 
-The `personal-finance` MCP server provides read-only access to the PostgreSQL data plane.
+The `personal-finance` MCP server provides access to the PostgreSQL data plane.
 
 **Run**: `uv run python -m src.mcp.server` (stdio transport)
 
@@ -44,8 +44,11 @@ The `personal-finance` MCP server provides read-only access to the PostgreSQL da
 | `get_financial_metrics(ticker)` | Computed margins, growth, returns, valuation ratios |
 | `get_prices(ticker, period="1y")` | Daily OHLCV price data |
 | `get_revenue_segments(ticker, fiscal_year=None)` | Revenue by product/geography/channel |
+| `get_stock_splits(ticker)` | Stock split history (date, ratio, source) |
+| `get_annual_financials(ticker, years=5)` | Combined financials with split-adjusted EPS |
 | `list_filings(ticker, form_type=None)` | SEC filing metadata |
 | `get_filing_content(ticker, filing_id)` | Raw HTML content of a SEC filing |
+| `save_analysis_report(ticker, report_type, title, content_md, file_path)` | Upsert an analysis report into the DB |
 
 ## Data Source Fallback Chain
 

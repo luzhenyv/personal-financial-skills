@@ -24,8 +24,11 @@ Read-only access to PostgreSQL. Available tools:
 - `get_financial_metrics(ticker)` — margins, growth, returns, valuation
 - `get_prices(ticker, period)` — daily OHLCV
 - `get_revenue_segments(ticker, fiscal_year)` — segment breakdown
+- `get_stock_splits(ticker)` — stock split history
+- `get_annual_financials(ticker, years)` — combined financials with split-adjusted EPS
 - `list_filings(ticker, form_type)` — SEC filing metadata
 - `get_filing_content(ticker, filing_id)` — raw filing HTML
+- `save_analysis_report(ticker, report_type, title, content_md, file_path)` — upsert report to DB
 
 ## Data Source Priority
 

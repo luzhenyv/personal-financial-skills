@@ -22,7 +22,7 @@ This skill produces company profile reports by reading structured data from the 
 
 See `references/data-sources.md` for full field-level mapping.
 
-**Stock Split Adjustment**: All per-share metrics must be split-adjusted to current share basis. See `references/stock-split-adjustment.md` for rules and implementation.
+**Stock Split Adjustment**: All per-share metrics must be split-adjusted to current share basis. The MCP tool `get_annual_financials` handles this automatically; the agent can also call `get_stock_splits` to inspect the split history.
 
 ## Trigger
 
@@ -64,6 +64,7 @@ Read data from MCP tools and `data/artifacts/{TICKER}/profile/10k_raw_sections.j
 - `get_cash_flows(ticker, years=5)` — FCF, CapEx
 - `get_financial_metrics(ticker)` — computed ratios
 - `get_revenue_segments(ticker)` — segment breakdown
+- `get_stock_splits(ticker)` — split history for per-share adjustment
 - `list_filings(ticker, form_type="10-K")` — filing history
 - `get_filing_content(ticker, filing_id)` — raw 10-K HTML (if `10k_raw_sections.json` is missing)
 
@@ -93,16 +94,26 @@ Reads peers from `data/artifacts/{TICKER}/profile/competitive_landscape.json`, f
 
 ## Task 3: Report Generation
 
+### Pre-step (agent-driven): Write `financial_data.json`
+
+Before running the script, the agent must call MCP `get_annual_financials(ticker)` and write the result to `data/artifacts/{TICKER}/profile/financial_data.json`. This file contains combined income, balance sheet, cash flow, and metric data with split-adjusted EPS.
+
+### Run the script
+
 ```bash
 uv run python skills/company-profile/scripts/generate_report.py {TICKER}
 #   --price 225.50    supply price if yfinance is stale
 ```
 
-Assembles all JSON files from `data/artifacts/{TICKER}/profile/` + PostgreSQL data into a markdown report with 14 sections (header, business summary, management, financials, margins, balance sheet, returns, valuation, comps, competitive landscape, thesis, risks, opportunities, appendix). See `references/tearsheet-template.md` for the report template.
+Assembles all JSON files from `data/artifacts/{TICKER}/profile/` into a markdown report with 14 sections (header, business summary, management, financials, margins, balance sheet, returns, valuation, comps, competitive landscape, thesis, risks, opportunities, appendix).
 
 **Formatting**: billions for large amounts (`$16.7B`), 1 decimal % , directional arrows (`+25.3%↑`), `N/A` for missing data, split-adjusted per-share metrics.
 
-**Outputs**: `data/artifacts/{TICKER}/profile/company_profile.md`, `analysis_reports` DB row, viewable in Streamlit.
+### Post-step (agent-driven): Persist to DB
+
+After the script runs, call MCP `save_analysis_report(ticker, 'company_profile', title, content_md, file_path)` to upsert the report into the `analysis_reports` table. Read the generated `company_profile.md` and pass its content.
+
+**Outputs**: `data/artifacts/{TICKER}/profile/company_profile.md`, viewable in Streamlit.
 
 ---
 
@@ -113,9 +124,12 @@ Assembles all JSON files from `data/artifacts/{TICKER}/profile/` + PostgreSQL da
 uv run python -m src.etl.pipeline ingest {TICKER} --years 5
 
 # Skill workflow
-# → Complete Task 1 manually (create 6 JSON files via AI using MCP data)
+# → Task 1: Create 6 JSON files via AI using MCP data
+# → Task 2:
 uv run python skills/company-profile/scripts/build_comps.py {TICKER}
+# → Task 3 pre-step: Agent calls MCP get_annual_financials → writes financial_data.json
 uv run python skills/company-profile/scripts/generate_report.py {TICKER}
+# → Task 3 post-step: Agent calls MCP save_analysis_report to persist in DB
 ```
 
 ## Quality Checks
@@ -124,8 +138,6 @@ See `references/quality-checks.md` for the full checklist.
 
 ## Reference Files
 
-- `references/tearsheet-template.md` — Report section template
 - `references/data-sources.md` — Where each data point comes from
 - `references/json-schemas.md` — Task 1 JSON file schemas with examples
-- `references/stock-split-adjustment.md` — Split adjustment rules and code
 - `references/quality-checks.md` — Post-run verification checklist

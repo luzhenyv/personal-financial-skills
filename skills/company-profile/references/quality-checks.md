@@ -12,11 +12,12 @@ Run these checks after completing all 3 tasks for a given ticker.
 
 - [ ] `data/artifacts/{TICKER}/profile/10k_raw_sections.json` exists with non-empty sections
 - [ ] All 6 JSON files exist in `data/artifacts/{TICKER}/profile/`
+- [ ] `data/artifacts/{TICKER}/profile/financial_data.json` exists (written by agent via MCP `get_annual_financials`)
 - [ ] Revenue figures in correct magnitude (billions vs millions — verify against MCP data)
 
 ## Stock Split Adjustment
 
-- [ ] If the company has had stock splits, verify `stock_splits.json` exists
+- [ ] Call MCP `get_stock_splits(ticker)` — verify split history is present if the company has had splits
 - [ ] All per-share metrics (EPS, DPS, shares outstanding) are adjusted to current share basis
 - [ ] Compare adjusted EPS against yfinance's split-adjusted values as a sanity check (should match within 1%)
 
@@ -37,16 +38,8 @@ Run these checks after completing all 3 tasks for a given ticker.
 ## Output
 
 - [ ] Report saved to `data/artifacts/{TICKER}/profile/company_profile.md`
-- [ ] Report saved to `analysis_reports` table in database
+- [ ] Report persisted via MCP `save_analysis_report` to `analysis_reports` table
 
-## Verification Query
+## Verification
 
-```sql
-SELECT fiscal_year, revenue/1e9 AS rev_b, gross_margin*100 AS gm_pct
-FROM income_statements i
-JOIN financial_metrics m USING (ticker, fiscal_year)
-WHERE i.ticker = '{ticker}' AND i.fiscal_quarter IS NULL
-ORDER BY fiscal_year;
-```
-
-Require **at least 3 years** of annual data before proceeding.
+Use MCP `get_income_statements(ticker)` and `get_financial_metrics(ticker)` to cross-check revenue and margins against the report. Require **at least 3 years** of annual data before proceeding.
