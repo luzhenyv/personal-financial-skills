@@ -25,8 +25,10 @@ INCOME_STATEMENT_TAGS: dict[str, list[str]] = {
         "RevenueFromContractWithCustomerExcludingAssessedTax",
         "Revenues",
         "RevenueFromContractWithCustomerIncludingAssessedTax",
+        "RevenuesNetOfInterestExpense",
         "SalesRevenueNet",
         "SalesRevenueGoodsNet",
+        "RegulatedAndUnregulatedOperatingRevenue",
     ],
     "cost_of_revenue": [
         "CostOfRevenue",
@@ -53,6 +55,7 @@ INCOME_STATEMENT_TAGS: dict[str, list[str]] = {
     "operating_expenses": [
         "OperatingExpenses",
         "CostsAndExpenses",
+        "NoninterestExpense",
     ],
     "operating_income": [
         "OperatingIncomeLoss",
@@ -61,11 +64,16 @@ INCOME_STATEMENT_TAGS: dict[str, list[str]] = {
         "InterestExpense",
         "InterestExpenseDebt",
         "InterestExpenseNonoperating",
+        "InterestAndDebtExpense",
+        "InterestCostsIncurred",
     ],
     "interest_income": [
         "InterestIncome",
         "InvestmentIncomeInterest",
         "InvestmentIncomeNonoperating",
+        "InvestmentIncomeInterestAndDividend",
+        "InterestIncomeOther",
+        "InvestmentIncomeNet",
     ],
     "other_income": [
         "OtherNonoperatingIncomeExpense",
@@ -104,6 +112,8 @@ BALANCE_SHEET_TAGS: dict[str, list[str]] = {
         "CashAndCashEquivalentsAtCarryingValue",
         "Cash",
         "CashCashEquivalentsAndShortTermInvestments",
+        "CashAndDueFromBanks",
+        "CashEquivalentsAtCarryingValue",
     ],
     "short_term_investments": [
         "ShortTermInvestments",
@@ -120,12 +130,14 @@ BALANCE_SHEET_TAGS: dict[str, list[str]] = {
     "inventory": [
         "InventoryNet",
         "InventoryFinishedGoodsAndWorkInProcess",
+        "InventoryNetOfAllowancesCustomerAdvancesAndProgressBillings",
     ],
     "total_current_assets": [
         "AssetsCurrent",
     ],
     "property_plant_equipment": [
         "PropertyPlantAndEquipmentNet",
+        "PropertyPlantAndEquipmentAndFinanceLeaseRightOfUseAssetAfterAccumulatedDepreciationAndAmortization",
     ],
     "goodwill": [
         "Goodwill",
@@ -140,6 +152,7 @@ BALANCE_SHEET_TAGS: dict[str, list[str]] = {
     "accounts_payable": [
         "AccountsPayableCurrent",
         "AccountsPayableAndAccruedLiabilitiesCurrent",
+        "AccountsPayableTradeCurrent",
     ],
     "deferred_revenue": [
         "DeferredRevenueCurrent",
@@ -161,6 +174,7 @@ BALANCE_SHEET_TAGS: dict[str, list[str]] = {
         "LongTermDebt",
         "LongTermDebtAndCapitalLeaseObligations",
         "ConvertibleDebtNoncurrent",
+        "LongTermDebtAndCapitalLeaseObligationsIncludingCurrentMaturities",
     ],
     "total_liabilities": [
         "Liabilities",
@@ -189,6 +203,7 @@ CASH_FLOW_TAGS: dict[str, list[str]] = {
         "DepreciationDepletionAndAmortization",
         "DepreciationAndAmortization",
         "Depreciation",
+        "DepreciationAmortizationAndAccretionNet",
     ],
     "stock_based_compensation": [
         "ShareBasedCompensation",
@@ -197,45 +212,57 @@ CASH_FLOW_TAGS: dict[str, list[str]] = {
     "change_in_working_capital": [
         "IncreaseDecreaseInOperatingCapital",
         "IncreaseDecreaseInOperatingLiabilities",
+        "IncreaseDecreaseInOtherOperatingCapitalNet",
     ],
     "cash_from_operations": [
         "NetCashProvidedByUsedInOperatingActivities",
+        "NetCashProvidedByUsedInOperatingActivitiesContinuingOperations",
     ],
     "capital_expenditure": [
         "PaymentsToAcquirePropertyPlantAndEquipment",
         "PaymentsToAcquireProductiveAssets",
         "PaymentsForCapitalImprovements",
         "PaymentsToAcquireOtherProductiveAssets",
+        "PaymentsToAcquireRealEstate",
+        "PaymentsToDevelopRealEstateAssets",
     ],
     "acquisitions": [
         "PaymentsToAcquireBusinessesNetOfCashAcquired",
         "PaymentsToAcquireBusinessesGross",
+        "PaymentsToAcquireBusinessesAndInterestInAffiliates",
     ],
     "purchases_of_investments": [
         "PaymentsToAcquireInvestments",
         "PaymentsToAcquireAvailableForSaleSecuritiesDebt",
         "PaymentsToAcquireShortTermInvestments",
+        "PaymentsToAcquireMarketableSecurities",
     ],
     "sales_of_investments": [
         "ProceedsFromSaleAndMaturityOfMarketableSecurities",
         "ProceedsFromMaturitiesPrepaymentsAndCallsOfAvailableForSaleSecurities",
         "ProceedsFromSaleMaturityAndCollectionsOfInvestments",
         "ProceedsFromSaleOfAvailableForSaleSecuritiesDebt",
+        "ProceedsFromSaleAndMaturityOfAvailableForSaleSecurities",
+        "ProceedsFromSaleAndMaturityOfOtherInvestments",
     ],
     "cash_from_investing": [
         "NetCashProvidedByUsedInInvestingActivities",
+        "NetCashProvidedByUsedInInvestingActivitiesContinuingOperations",
     ],
     "debt_issuance": [
         "ProceedsFromIssuanceOfLongTermDebt",
         "ProceedsFromDebtNetOfIssuanceCosts",
         "ProceedsFromIssuanceOfDebt",
         "ProceedsFromDebtMaturingInMoreThanThreeMonths",
+        "ProceedsFromIssuanceOfLongTermDebtAndCapitalSecuritiesNet",
     ],
     "debt_repayment": [
         "RepaymentsOfLongTermDebt",
         "RepaymentsOfDebt",
         "RepaymentsOfLongTermDebtAndCapitalSecurities",
         "RepaymentsOfDebtMaturingInMoreThanThreeMonths",
+        "RepaymentsOfDebtAndCapitalLeaseObligations",
+        "RepaymentsOfConvertibleDebt",
     ],
     "share_repurchase": [
         "PaymentsForRepurchaseOfCommonStock",
@@ -247,10 +274,12 @@ CASH_FLOW_TAGS: dict[str, list[str]] = {
     ],
     "cash_from_financing": [
         "NetCashProvidedByUsedInFinancingActivities",
+        "NetCashProvidedByUsedInFinancingActivitiesContinuingOperations",
     ],
     "net_change_in_cash": [
         "CashCashEquivalentsRestrictedCashAndRestrictedCashEquivalentsPeriodIncreaseDecreaseIncludingExchangeRateEffect",
         "CashAndCashEquivalentsPeriodIncreaseDecrease",
+        "CashCashEquivalentsRestrictedCashAndRestrictedCashEquivalentsPeriodIncreaseDecreaseExcludingExchangeRateEffect",
     ],
 }
 

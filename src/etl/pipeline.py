@@ -116,6 +116,8 @@ def ingest_company(
         except Exception as e:
             summary["errors"].append(f"company_metadata: {e}")
             logger.error(f"[{ticker}] Company metadata failed: {e}")
+            # Company row is required for FK constraints — cannot continue
+            raise
 
         # Step 4: Fetch XBRL facts
         logger.info(f"[{ticker}] Step 4: Fetching XBRL facts")
