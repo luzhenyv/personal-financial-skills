@@ -42,6 +42,13 @@ INCOME_STATEMENT_TAGS: dict[str, list[str]] = {
     "selling_general_admin": [
         "SellingGeneralAndAdministrativeExpense",
         "GeneralAndAdministrativeExpense",
+        "SellingAndMarketingExpense",
+    ],
+    "depreciation_amortization": [
+        "DepreciationDepletionAndAmortization",
+        "DepreciationAndAmortization",
+        "Depreciation",
+        "DepreciationAmortizationAndAccretionNet",
     ],
     "operating_expenses": [
         "OperatingExpenses",
@@ -53,10 +60,12 @@ INCOME_STATEMENT_TAGS: dict[str, list[str]] = {
     "interest_expense": [
         "InterestExpense",
         "InterestExpenseDebt",
+        "InterestExpenseNonoperating",
     ],
     "interest_income": [
         "InterestIncome",
         "InvestmentIncomeInterest",
+        "InvestmentIncomeNonoperating",
     ],
     "other_income": [
         "OtherNonoperatingIncomeExpense",
@@ -104,6 +113,8 @@ BALANCE_SHEET_TAGS: dict[str, list[str]] = {
     "accounts_receivable": [
         "AccountsReceivableNetCurrent",
         "AccountsReceivableNet",
+        "ReceivablesNetCurrent",
+        "OtherReceivablesNetCurrent",
     ],
     "inventory": [
         "InventoryNet",
@@ -129,6 +140,11 @@ BALANCE_SHEET_TAGS: dict[str, list[str]] = {
         "AccountsPayableCurrent",
         "AccountsPayableAndAccruedLiabilitiesCurrent",
     ],
+    "deferred_revenue": [
+        "DeferredRevenueCurrent",
+        "DeferredRevenue",
+        "ContractWithCustomerLiabilityCurrent",
+    ],
     "short_term_debt": [
         "ShortTermBorrowings",
         "DebtCurrent",
@@ -140,6 +156,7 @@ BALANCE_SHEET_TAGS: dict[str, list[str]] = {
     "long_term_debt": [
         "LongTermDebtNoncurrent",
         "LongTermDebt",
+        "LongTermDebtAndCapitalLeaseObligations",
     ],
     "total_liabilities": [
         "Liabilities",
@@ -147,6 +164,7 @@ BALANCE_SHEET_TAGS: dict[str, list[str]] = {
     "common_stock": [
         "CommonStockValue",
         "CommonStocksIncludingAdditionalPaidInCapital",
+        "CommonStockValueOutstanding",
     ],
     "retained_earnings": [
         "RetainedEarningsAccumulatedDeficit",
@@ -191,10 +209,13 @@ CASH_FLOW_TAGS: dict[str, list[str]] = {
     "purchases_of_investments": [
         "PaymentsToAcquireInvestments",
         "PaymentsToAcquireAvailableForSaleSecuritiesDebt",
+        "PaymentsToAcquireShortTermInvestments",
     ],
     "sales_of_investments": [
         "ProceedsFromSaleAndMaturityOfMarketableSecurities",
         "ProceedsFromMaturitiesPrepaymentsAndCallsOfAvailableForSaleSecurities",
+        "ProceedsFromSaleMaturityAndCollectionsOfInvestments",
+        "ProceedsFromSaleOfAvailableForSaleSecuritiesDebt",
     ],
     "cash_from_investing": [
         "NetCashProvidedByUsedInInvestingActivities",
@@ -202,10 +223,12 @@ CASH_FLOW_TAGS: dict[str, list[str]] = {
     "debt_issuance": [
         "ProceedsFromIssuanceOfLongTermDebt",
         "ProceedsFromDebtNetOfIssuanceCosts",
+        "ProceedsFromIssuanceOfDebt",
     ],
     "debt_repayment": [
         "RepaymentsOfLongTermDebt",
         "RepaymentsOfDebt",
+        "RepaymentsOfLongTermDebtAndCapitalSecurities",
     ],
     "share_repurchase": [
         "PaymentsForRepurchaseOfCommonStock",
@@ -383,6 +406,21 @@ def parse_income_statement(
         result[field] = val
         if values:
             raw_values[field] = {"tag": tags[0], "values": values[-3:]}
+
+    # Derived: Gross Profit = Revenue − Cost of Revenue
+    if result.get("gross_profit") is None:
+        rev = result.get("revenue")
+        cogs = result.get("cost_of_revenue")
+        if rev is not None and cogs is not None:
+            result["gross_profit"] = rev - abs(cogs)
+
+    # Derived: Operating Expenses = Gross Profit − Operating Income
+    # (fallback for companies that don't tag OperatingExpenses, e.g. NFLX)
+    if result.get("operating_expenses") is None:
+        gp = result.get("gross_profit")
+        oi = result.get("operating_income")
+        if gp is not None and oi is not None:
+            result["operating_expenses"] = gp - oi
 
     result["raw_json"] = raw_values
     return result
