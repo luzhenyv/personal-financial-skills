@@ -134,9 +134,24 @@ def ingest_company(
         if not available_years:
             raise ValueError(f"No fiscal year data found for {ticker}")
 
-        # Step 5: Parse & store 3 statements
+        # Step 5: Parse & store 3 statements (SEC → yfinance → Alpha Vantage)
         logger.info(f"[{ticker}] Step 5: Parsing financial statements")
         parsed_data: dict[int, dict[str, dict]] = {}
+
+        # Initialise fallback sources (lazy-loaded on first gap)
+        from src.etl.data_fallback import (
+            AlphaVantageFallback,
+            YFinanceFallback,
+            fill_statement_gaps,
+        )
+
+        yf_fallback = YFinanceFallback(ticker)
+        av_fallback = (
+            AlphaVantageFallback(ticker)
+            if settings.alpha_vantage_key
+            else None
+        )
+        all_sources_used: dict[str, list[str]] = {"yfinance": [], "alpha_vantage": []}
 
         for fy in available_years:
             periods = [(fy, None)]  # Annual
@@ -145,11 +160,21 @@ def ingest_company(
 
             for year, qtr in periods:
                 try:
+                    # 1. Primary: SEC XBRL parsing
                     inc = xbrl_parser.parse_income_statement(facts, year, qtr)
                     bal = xbrl_parser.parse_balance_sheet(facts, year, qtr)
                     cf = xbrl_parser.parse_cash_flow(facts, year, qtr)
 
-                    # Skip if no meaningful data
+                    # 2. Fallback chain: fill gaps via yfinance → Alpha Vantage
+                    inc, bal, cf, sources = fill_statement_gaps(
+                        ticker, year, qtr, inc, bal, cf,
+                        yf_fallback=yf_fallback,
+                        av_fallback=av_fallback,
+                    )
+                    for src_name in ("yfinance", "alpha_vantage"):
+                        all_sources_used[src_name].extend(sources.get(src_name, []))
+
+                    # Skip if no meaningful data even after fallback
                     if inc.get("revenue") is None and inc.get("net_income") is None:
                         continue
 
@@ -174,6 +199,15 @@ def ingest_company(
             f"[{ticker}] Stored: {counts['income_statements']} IS, "
             f"{counts['balance_sheets']} BS, {counts['cash_flow_statements']} CF"
         )
+        if all_sources_used["yfinance"] or all_sources_used["alpha_vantage"]:
+            summary["fallback_sources"] = {
+                k: v for k, v in all_sources_used.items() if v
+            }
+            logger.info(
+                f"[{ticker}] Fallback summary — "
+                f"yfinance: {len(all_sources_used['yfinance'])} fields, "
+                f"AV: {len(all_sources_used['alpha_vantage'])} fields"
+            )
 
         # Step 6: Revenue segments
         logger.info(f"[{ticker}] Step 6: Parsing revenue segments")

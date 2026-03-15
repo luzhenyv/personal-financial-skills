@@ -230,6 +230,55 @@ def get_market_data(ticker: str) -> dict[str, Any] | None:
         return None
 
 
+def get_historical_capex(ticker: str) -> dict[int, int | None]:
+    """Fetch historical annual CapEx from yfinance cashflow statement.
+
+    Used as a fallback when the SEC XBRL company_facts.json is missing the
+    capital_expenditure tag for a given fiscal year (e.g. NVDA FY2023 uses
+    PaymentsToAcquireProductiveAssets at annual level, which SEC EDGAR omits).
+
+    Returns:
+        Dict mapping fiscal_year (int) → capital_expenditure (absolute value, int).
+        Years where CapEx is NaN are excluded.
+    """
+    if not _HAS_YFINANCE:
+        return {}
+
+    try:
+        stock = yf.Ticker(ticker.upper())
+        cf = stock.cashflow  # columns = period end dates, index = line items
+
+        if cf is None or cf.empty:
+            return {}
+
+        capex_row = None
+        for label in ("Capital Expenditure", "Purchase Of PPE", "Net PPE Purchase And Sale"):
+            if label in cf.index:
+                capex_row = cf.loc[label]
+                break
+
+        if capex_row is None:
+            return {}
+
+        result: dict[int, int | None] = {}
+        for col, val in capex_row.items():
+            try:
+                import pandas as pd
+                if pd.isna(val):
+                    continue
+                # yfinance reports CapEx as a negative number; store absolute value
+                result[col.year] = abs(int(val))
+            except Exception:
+                continue
+
+        logger.info(f"yfinance CapEx fallback for {ticker}: {result}")
+        return result
+
+    except Exception as e:
+        logger.error(f"yfinance historical capex error for {ticker}: {e}")
+        return {}
+
+
 def get_peers(ticker: str, n: int = 10) -> list[str]:
     """Discover peer companies in the same sector/industry."""
     if not _HAS_YFINANCE:
