@@ -4,7 +4,59 @@ Re-usable across multiple Streamlit pages.
 """
 
 import json
+import re
 from pathlib import Path
+
+
+# ──────────────────────────────────────────────
+# Markdown helpers
+# ──────────────────────────────────────────────
+
+def escape_currency_dollars(text: str) -> str:
+    """Escape currency dollar signs so Streamlit doesn't render them as LaTeX.
+
+    Rules:
+    - Already-escaped \\$ → kept as-is
+    - LaTeX display math $$...$$ → kept as-is
+    - LaTeX inline math $...$ (where char after $ is NOT a digit/comma/period) → kept as-is
+    - Currency $ (followed by digit, comma, or period) → escaped to \\$
+    """
+    result = []
+    i = 0
+    n = len(text)
+
+    while i < n:
+        if text[i] == '\\' and i + 1 < n and text[i + 1] == '$':
+            result.append('\\$')
+            i += 2
+            continue
+
+        if text[i] == '$':
+            # Display math: $$...$$
+            if i + 1 < n and text[i + 1] == '$':
+                end = text.find('$$', i + 2)
+                if end != -1:
+                    result.append(text[i:end + 2])
+                    i = end + 2
+                    continue
+
+            # Inline math: $...$ where next char is NOT a digit/comma/period
+            if i + 1 < n and not re.match(r'[\d.,]', text[i + 1]):
+                end = text.find('$', i + 1)
+                if end != -1:
+                    result.append(text[i:end + 1])
+                    i = end + 1
+                    continue
+
+            # Currency dollar sign — escape it
+            result.append('\\$')
+            i += 1
+            continue
+
+        result.append(text[i])
+        i += 1
+
+    return ''.join(result)
 
 
 # ──────────────────────────────────────────────

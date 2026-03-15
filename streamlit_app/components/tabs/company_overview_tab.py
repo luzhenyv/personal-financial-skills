@@ -7,7 +7,7 @@ import pandas as pd
 import plotly.graph_objects as go
 
 from streamlit_app.components.styles import COLORS
-from streamlit_app.components.utils import fmt_growth
+from streamlit_app.components.utils import fmt_growth, escape_currency_dollars
 from streamlit_app.components.loaders.company import CompanyPageData
 
 
@@ -48,11 +48,11 @@ def render_overview_tab(d: CompanyPageData) -> None:
         if len(desc) > 1500:
             cut = desc[:1500].rfind(". ")
             desc = desc[: cut + 1] if cut > 500 else desc[:1500] + "..."
-        st.markdown(desc)
+        st.markdown(escape_currency_dollars(desc))
 
         if d.overview.get("business_overview"):
             with st.expander("Read more about the business"):
-                st.markdown(d.overview["business_overview"])
+                st.markdown(escape_currency_dollars(d.overview["business_overview"]))
 
         st.markdown("")
 
