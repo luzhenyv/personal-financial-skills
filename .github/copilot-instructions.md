@@ -57,12 +57,24 @@ Tell the user to run ETL first:
 uv run python -m src.etl.pipeline ingest {TICKER} --years 5
 ```
 
+## Agent
+
+Use `@Personal Finance Assistant` for:
+- Generating company profiles: "@Personal Finance Assistant generate profile for NVDA"
+- Creating / updating investment theses: "@Personal Finance Assistant create thesis for AAPL"
+- Thesis health checks: "@Personal Finance Assistant thesis health check TSLA"
+
 ## Key Commands
 
 ```bash
 # Company profile workflow
 uv run python skills/company-profile/scripts/build_comps.py {TICKER}
 uv run python skills/company-profile/scripts/generate_report.py {TICKER}
+
+# Investment thesis workflow
+uv run python skills/thesis-tracker/scripts/create_thesis.py {TICKER} --interactive
+uv run python skills/thesis-tracker/scripts/health_check.py {TICKER}
+uv run python skills/thesis-tracker/scripts/generate_report.py {TICKER}
 
 # Section extraction
 uv run python -m src.etl.section_extractor {TICKER}
