@@ -1,5 +1,7 @@
 """Add an update entry to an existing thesis.
 
+Appends to updates.json and regenerates the markdown report.
+
 Usage:
     uv run python skills/thesis-tracker/scripts/update_thesis.py NVDA --interactive
     uv run python skills/thesis-tracker/scripts/update_thesis.py NVDA \\
@@ -43,7 +45,7 @@ def _interactive_update(ticker: str) -> dict:
     if assumptions:
         print("\nAssumption impacts (✓ strengthened, ⚠️ weakened, ✗ broken, — no change):")
         for i, a in enumerate(assumptions):
-            desc = a.get("description", f"Assumption {i+1}")
+            desc = a.get("description", f"Assumption {i+1}") if isinstance(a, dict) else str(a)
             status = input(f"  {desc} [—]: ").strip() or "—"
             explanation = input(f"    Explanation: ").strip()
             impacts[str(i)] = {"status": status, "explanation": explanation}
@@ -94,11 +96,18 @@ def main():
         parser.error("Provide --event or --interactive")
         return
 
-    from src.analysis.thesis_tracker import add_thesis_update
+    from src.analysis.thesis_tracker import add_thesis_update, generate_thesis_markdown
 
     result = add_thesis_update(ticker, **data)
-    print(f"\n✅ Thesis update recorded for {ticker} (id={result['id']})")
+
+    # Regenerate markdown
+    md = generate_thesis_markdown(ticker)
+    md_path = Path(f"data/artifacts/{ticker}/thesis/thesis_{ticker}.md")
+    md_path.write_text(md)
+
+    print(f"\n✅ Thesis update recorded for {ticker}")
     print(f"   Strength: {result['strength_change']} → Action: {result['action_taken']}")
+    print(f"   Report → {md_path}")
 
 
 if __name__ == "__main__":

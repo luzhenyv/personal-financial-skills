@@ -19,6 +19,7 @@ class ThesisPageData:
     updates: list[dict] = field(default_factory=list)
     health_checks: list[dict] = field(default_factory=list)
     latest_health: dict | None = None
+    catalysts: list[dict] = field(default_factory=list)
 
     # Convenience
     assumptions: list[dict] = field(default_factory=list)
@@ -46,5 +47,6 @@ def load_thesis_page_data(ticker: str) -> ThesisPageData | None:
         updates=detail.get("updates", []),
         health_checks=detail.get("health_checks", []),
         latest_health=detail.get("latest_health"),
+        catalysts=detail.get("catalysts", []),
         assumptions=thesis.get("assumptions", []),
     )

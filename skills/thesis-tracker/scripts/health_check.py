@@ -1,5 +1,8 @@
 """Run a thesis health check for a company.
 
+Computes objective score from financial data, appends to health_checks.json,
+and regenerates the markdown report.
+
 Usage:
     uv run python skills/thesis-tracker/scripts/health_check.py NVDA
     uv run python skills/thesis-tracker/scripts/health_check.py --all
@@ -28,9 +31,7 @@ def compute_objective_score(ticker: str, assumptions: list[dict]) -> tuple[float
         return 50.0, []
 
     latest_metrics = (profile.get("metrics") or [{}])[-1]
-    latest_income = (profile.get("income_statements") or [{}])[-1]
 
-    # Build a lookup of available KPI values
     kpi_values = {
         "gross_margin": float(latest_metrics.get("gross_margin") or 0),
         "operating_margin": float(latest_metrics.get("operating_margin") or 0),
@@ -47,6 +48,10 @@ def compute_objective_score(ticker: str, assumptions: list[dict]) -> tuple[float
     total_weight = 0.0
 
     for i, assumption in enumerate(assumptions):
+        if isinstance(assumption, str):
+            per_assumption.append({"assumption_idx": i, "objective": 50.0})
+            continue
+
         weight = float(assumption.get("weight", 0))
         kpi_metric = assumption.get("kpi_metric")
         thresholds = assumption.get("kpi_thresholds")
@@ -55,13 +60,9 @@ def compute_objective_score(ticker: str, assumptions: list[dict]) -> tuple[float
             value = kpi_values[kpi_metric]
             score = _score_from_thresholds(value, thresholds)
         else:
-            # Default to 50 (neutral) if no KPI is configured
             score = 50.0
 
-        per_assumption.append({
-            "assumption_idx": i,
-            "objective": round(score, 1),
-        })
+        per_assumption.append({"assumption_idx": i, "objective": round(score, 1)})
         weighted_sum += score * weight
         total_weight += weight
 
@@ -70,11 +71,7 @@ def compute_objective_score(ticker: str, assumptions: list[dict]) -> tuple[float
 
 
 def _score_from_thresholds(value: float, thresholds: dict) -> float:
-    """Score a KPI value against threshold ranges.
-
-    thresholds format: {"excellent": 0.65, "good": 0.60, "warning": 0.55, "critical": 0.50}
-    Returns 0-100 score.
-    """
+    """Score a KPI value against threshold ranges (0-100)."""
     if not thresholds:
         return 50.0
 
@@ -96,14 +93,7 @@ def _score_from_thresholds(value: float, thresholds: dict) -> float:
 
 
 def run_health_check(ticker: str) -> dict:
-    """Run a full health check for *ticker*.
-
-    Computes objective score from financial data. Subjective score defaults to
-    50 (neutral) — it should be overridden by the LLM when invoked via the skill.
-
-    Returns:
-        The health check result dict.
-    """
+    """Run a full health check for *ticker* and return the result dict."""
     from src.analysis.thesis_tracker import get_active_thesis, add_health_check
 
     thesis = get_active_thesis(ticker)
@@ -115,19 +105,17 @@ def run_health_check(ticker: str) -> dict:
     obj_score, per_assumption = compute_objective_score(ticker, assumptions)
 
     # Subjective score: 50 = neutral placeholder for CLI usage
-    # When invoked by LLM skill, this will be replaced with actual assessment
     subj_score = 50.0
 
-    # Merge per-assumption scores
+    obj_w = 0.60
+    subj_w = 0.40
+
     assumption_scores = []
     for i, a in enumerate(assumptions):
         obj_a = per_assumption[i]["objective"] if i < len(per_assumption) else 50.0
-        subj_a = 50.0  # placeholder for LLM to fill
-        obj_w = float(thesis.get("objective_weight", 0.60))
-        subj_w = float(thesis.get("subjective_weight", 0.40))
+        subj_a = 50.0
         combined = obj_a * obj_w + subj_a * subj_w
 
-        # Status based on combined score
         if combined >= 70:
             status = "✓ Intact"
         elif combined >= 40:
@@ -135,16 +123,21 @@ def run_health_check(ticker: str) -> dict:
         else:
             status = "✗ Broken"
 
+        desc = a.get("description", f"Assumption {i+1}") if isinstance(a, dict) else str(a)
+        weight = a.get("weight") if isinstance(a, dict) else None
+
         assumption_scores.append({
             "assumption_idx": i,
+            "description": desc,
+            "weight": weight,
             "objective": round(obj_a, 1),
             "subjective": round(subj_a, 1),
             "combined": round(combined, 1),
             "status": status,
         })
 
-    # Determine recommendation
-    composite = obj_score * float(thesis.get("objective_weight", 0.60)) + subj_score * float(thesis.get("subjective_weight", 0.40))
+    composite = obj_score * obj_w + subj_score * subj_w
+
     if composite >= 75:
         recommendation = "hold"
         reasoning = "Thesis remains strong. Continue monitoring assumptions."
@@ -160,11 +153,10 @@ def run_health_check(ticker: str) -> dict:
 
     observations = []
     for i, score in enumerate(assumption_scores):
-        a_desc = assumptions[i].get("description", f"Assumption {i+1}") if i < len(assumptions) else f"Assumption {i+1}"
         if score["combined"] < 40:
-            observations.append(f"⚠️ {a_desc} — score {score['combined']:.0f}, below threshold")
+            observations.append(f"⚠️ {score['description']} — score {score['combined']:.0f}, below threshold")
         elif score["combined"] >= 80:
-            observations.append(f"✓ {a_desc} — strong at {score['combined']:.0f}")
+            observations.append(f"✓ {score['description']} — strong at {score['combined']:.0f}")
 
     result = add_health_check(
         ticker,
@@ -186,6 +178,8 @@ def main():
     parser.add_argument("--all", action="store_true", help="Check all active theses")
     args = parser.parse_args()
 
+    from src.analysis.thesis_tracker import generate_thesis_markdown
+
     if args.all:
         from src.analysis.thesis_tracker import get_all_active_theses
         theses = get_all_active_theses()
@@ -196,16 +190,26 @@ def main():
             ticker = t["ticker"]
             print(f"\n--- {ticker} ---")
             result = run_health_check(ticker)
+            # Regenerate markdown
+            md = generate_thesis_markdown(ticker)
+            Path(f"data/artifacts/{ticker}/thesis/thesis_{ticker}.md").write_text(md)
+
             print(f"  Composite: {result['composite_score']}/100")
             print(f"  Objective: {result['objective_score']} | Subjective: {result['subjective_score']}")
             print(f"  Recommendation: {result['recommendation']}")
     elif args.ticker:
         ticker = args.ticker.upper()
         result = run_health_check(ticker)
+
+        md = generate_thesis_markdown(ticker)
+        md_path = Path(f"data/artifacts/{ticker}/thesis/thesis_{ticker}.md")
+        md_path.write_text(md)
+
         print(f"\n✅ Health check for {ticker}")
         print(f"   Composite: {result['composite_score']}/100")
         print(f"   Objective: {result['objective_score']} | Subjective: {result['subjective_score']}")
         print(f"   Recommendation: {result['recommendation']}")
+        print(f"   Report → {md_path}")
     else:
         parser.error("Provide a ticker or --all")
 
