@@ -187,9 +187,9 @@ If `data/artifacts/{TICKER}/profile/investment_thesis.json` exists, offer to see
 
 **Script**:
 ```bash
-uv run python skills/thesis-tracker/scripts/create_thesis.py {TICKER} --interactive
+uv run python skills/thesis-tracker/scripts/thesis_cli.py create {TICKER} --interactive
 # Seed from company-profile artifacts:
-uv run python skills/thesis-tracker/scripts/create_thesis.py {TICKER} --from-profile
+uv run python skills/thesis-tracker/scripts/thesis_cli.py create {TICKER} --from-profile
 ```
 
 **Output**: `data/artifacts/{TICKER}/thesis/thesis.json` + empty `updates.json`, `health_checks.json`, `catalysts.json`.
@@ -207,9 +207,9 @@ Ask the user for:
 
 **Script**:
 ```bash
-uv run python skills/thesis-tracker/scripts/update_thesis.py {TICKER} --interactive
+uv run python skills/thesis-tracker/scripts/thesis_cli.py update {TICKER} --interactive
 # Direct:
-uv run python skills/thesis-tracker/scripts/update_thesis.py {TICKER} \
+uv run python skills/thesis-tracker/scripts/thesis_cli.py update {TICKER} \
     --event "Q3 2025 earnings beat" --strength strengthened --action hold --conviction high
 ```
 
@@ -230,9 +230,9 @@ See `skills/thesis-tracker/references/scoring-methodology.md` for full methodolo
 
 **Script**:
 ```bash
-uv run python skills/thesis-tracker/scripts/health_check.py {TICKER}
+uv run python skills/thesis-tracker/scripts/thesis_cli.py check {TICKER}
 # Batch all active theses:
-uv run python skills/thesis-tracker/scripts/health_check.py --all
+uv run python skills/thesis-tracker/scripts/thesis_cli.py check --all
 ```
 
 **Output**: Appended entry in `data/artifacts/{TICKER}/thesis/health_checks.json` with assumption scorecard.
@@ -250,19 +250,19 @@ When a catalyst materialises, mark it as resolved and trigger the update flow (T
 
 **Script**:
 ```bash
-uv run python skills/thesis-tracker/scripts/manage_catalysts.py {TICKER} --add
-uv run python skills/thesis-tracker/scripts/manage_catalysts.py {TICKER} --resolve 1
-uv run python skills/thesis-tracker/scripts/manage_catalysts.py {TICKER} --list
+uv run python skills/thesis-tracker/scripts/thesis_cli.py catalyst {TICKER} --add
+uv run python skills/thesis-tracker/scripts/thesis_cli.py catalyst {TICKER} --resolve 1
+uv run python skills/thesis-tracker/scripts/thesis_cli.py catalyst {TICKER} --list
 ```
 
 **Output**: Entries in `data/artifacts/{TICKER}/thesis/catalysts.json`.
 
 ## Thesis Post-Task: Report Generation
 
-After **any** thesis task, regenerate the markdown report and persist it:
+The CLI auto-regenerates `thesis_{TICKER}.md` after every subcommand. To regenerate manually:
 
 ```bash
-uv run python skills/thesis-tracker/scripts/generate_report.py {TICKER}
+uv run python skills/thesis-tracker/scripts/thesis_cli.py report {TICKER}
 ```
 
 Then call:
@@ -305,10 +305,10 @@ uv run python -m src.etl.section_extractor {TICKER}
 uv run python skills/company-profile/scripts/build_comps.py {TICKER}   # CP Task 2
 uv run python skills/company-profile/scripts/generate_report.py {TICKER}  # CP Task 3
 
-# --- Investment Thesis ---
-uv run python skills/thesis-tracker/scripts/create_thesis.py {TICKER} --interactive     # Task 1
-uv run python skills/thesis-tracker/scripts/update_thesis.py {TICKER} --interactive     # Task 2
-uv run python skills/thesis-tracker/scripts/health_check.py {TICKER}                    # Task 3
-uv run python skills/thesis-tracker/scripts/manage_catalysts.py {TICKER} --add          # Task 4
-uv run python skills/thesis-tracker/scripts/generate_report.py {TICKER}                 # Post-task
+# --- Investment Thesis (unified CLI) ---
+uv run python skills/thesis-tracker/scripts/thesis_cli.py create  {TICKER} --interactive  # Task 1
+uv run python skills/thesis-tracker/scripts/thesis_cli.py update  {TICKER} --interactive  # Task 2
+uv run python skills/thesis-tracker/scripts/thesis_cli.py check   {TICKER}               # Task 3
+uv run python skills/thesis-tracker/scripts/thesis_cli.py catalyst {TICKER} --add         # Task 4
+uv run python skills/thesis-tracker/scripts/thesis_cli.py report  {TICKER}               # Post-task
 ```

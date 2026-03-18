@@ -114,6 +114,13 @@ uv run python -m src.etl.pipeline sync-prices
 uv run python skills/company-profile/scripts/build_comps.py {TICKER}
 uv run python skills/company-profile/scripts/generate_report.py {TICKER}
 
+# Investment thesis (unified CLI)
+uv run python skills/thesis-tracker/scripts/thesis_cli.py create  {TICKER} --interactive
+uv run python skills/thesis-tracker/scripts/thesis_cli.py update  {TICKER} --interactive
+uv run python skills/thesis-tracker/scripts/thesis_cli.py check   {TICKER}
+uv run python skills/thesis-tracker/scripts/thesis_cli.py catalyst {TICKER} --add
+uv run python skills/thesis-tracker/scripts/thesis_cli.py report  {TICKER}
+
 # Section extraction (run after ETL)
 uv run python -m src.etl.section_extractor {TICKER}
 ```

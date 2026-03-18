@@ -51,6 +51,8 @@ Run these checks after completing each task for a given ticker.
 - [ ] `thesis_{TICKER}.md` saved to `data/artifacts/{TICKER}/thesis/`
 - [ ] Report persisted via MCP `save_analysis_report(ticker, 'thesis_tracker', ...)` to `analysis_reports` table
 
+**CLI**: All tasks run via `uv run python skills/thesis-tracker/scripts/thesis_cli.py <subcommand> {TICKER}`
+
 ## Cross-Skill Integration
 
 ### company-profile (existing)

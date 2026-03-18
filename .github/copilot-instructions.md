@@ -71,10 +71,12 @@ Use `@Personal Finance Assistant` for:
 uv run python skills/company-profile/scripts/build_comps.py {TICKER}
 uv run python skills/company-profile/scripts/generate_report.py {TICKER}
 
-# Investment thesis workflow
-uv run python skills/thesis-tracker/scripts/create_thesis.py {TICKER} --interactive
-uv run python skills/thesis-tracker/scripts/health_check.py {TICKER}
-uv run python skills/thesis-tracker/scripts/generate_report.py {TICKER}
+# Investment thesis workflow (unified CLI)
+uv run python skills/thesis-tracker/scripts/thesis_cli.py create  {TICKER} --interactive
+uv run python skills/thesis-tracker/scripts/thesis_cli.py update  {TICKER} --interactive
+uv run python skills/thesis-tracker/scripts/thesis_cli.py check   {TICKER}
+uv run python skills/thesis-tracker/scripts/thesis_cli.py catalyst {TICKER} --add
+uv run python skills/thesis-tracker/scripts/thesis_cli.py report  {TICKER}
 
 # Section extraction
 uv run python -m src.etl.section_extractor {TICKER}
