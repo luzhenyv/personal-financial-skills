@@ -1596,6 +1596,6 @@ Complete list of files requiring `src.` → `pfs.` changes:
 - [ ] User approves Phase 2 (Docker PostgreSQL, task registry, Prefect, MCP HTTP)
 - [ ] User approves Phase 3 (task dispatcher, OpenClaw config on Agent Server)
 - [ ] User approves Phase 4 (config.yaml on skills)
-- [ ] User approves Phase 5 plan (phased dashboard evolution)
+- [x] User approves Phase 5 plan (phased dashboard evolution)
 - [ ] User confirms DMIT server access for Phase 3 deployment
 - [ ] User confirms Tailscale IPs for cross-server config

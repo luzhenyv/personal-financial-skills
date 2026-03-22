@@ -28,6 +28,7 @@ dependencies = [
     "yfinance>=1.2.0",
     "pypdf2>=3.0.1",
     "prefect>=3.6.23",
+    "pyyaml>=6.0",
 ]
 
 [project.optional-dependencies]

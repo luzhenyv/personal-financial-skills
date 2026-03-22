@@ -30,7 +30,8 @@ Powered by SEC EDGAR filings, Python-based valuation models, and interactive Plo
 | Page | Description |
 |------|-------------|
 | **🏢 Company Profile** | Financials, margins, valuation, and investment report — all in one page |
-| **🎯 Thesis Tracker** | Investment thesis management — create, update, and health-check theses |
+| **🎯 Thesis Tracker** | Investment thesis management — create, update, edit, and health-check theses |
+| **💬 Agent Chat** | Send commands to the AI agent — natural language task dispatch |
 
 ### 3-Tab Company Profile
 

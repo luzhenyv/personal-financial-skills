@@ -1,0 +1,30 @@
+name: company-profile
+version: "1.0"
+description: "Generate 1-page company tearsheet with financials, comps, and report"
+
+triggers:
+  - event: new_filing
+    filter: {form_type: ["10-K"]}
+    action: generate
+  - event: task_request
+    action: generate
+
+inputs:
+  mcp_tools:
+    - get_company
+    - get_income_statements
+    - get_balance_sheets
+    - get_cash_flows
+    - get_financial_metrics
+    - get_prices
+    - get_revenue_segments
+  artifacts: []
+
+outputs:
+  path: "data/artifacts/{ticker}/profile/"
+  files:
+    - profile.json
+    - comps.json
+    - company_report.md
+
+requires_intelligence: true

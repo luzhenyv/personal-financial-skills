@@ -241,6 +241,84 @@ def create_thesis(
     return thesis
 
 
+def update_thesis(ticker: str, **fields: Any) -> dict:
+    """Update mutable fields on an existing thesis and return the updated dict.
+
+    Only the provided keyword arguments are overwritten. Accepted fields:
+    ``core_thesis``, ``position``, ``status``, ``buy_reasons``,
+    ``assumptions``, ``sell_conditions``, ``risk_factors``,
+    ``target_price``, ``stop_loss_price``.
+    """
+    ticker = ticker.upper()
+    _migrate_legacy(ticker)
+
+    thesis = _load_thesis_json(ticker)
+    if thesis is None:
+        raise ValueError(f"No thesis found for {ticker}. Create one first.")
+
+    allowed = {
+        "core_thesis", "position", "status", "buy_reasons",
+        "assumptions", "sell_conditions", "risk_factors",
+        "target_price", "stop_loss_price",
+    }
+    for key, value in fields.items():
+        if key in allowed:
+            thesis[key] = value
+
+    thesis["updated_at"] = datetime.now(timezone.utc).isoformat()
+    _save_json(_thesis_dir(ticker) / "thesis.json", thesis)
+    return thesis
+
+
+def update_catalyst_notes(
+    ticker: str,
+    catalyst_id: int,
+    *,
+    notes: str | None = None,
+    event: str | None = None,
+    expected_date: str | None = None,
+    expected_impact: str | None = None,
+) -> dict:
+    """Update editable fields on a catalyst entry and return it."""
+    ticker = ticker.upper()
+    d = _thesis_dir(ticker)
+    cat_data = _load_catalysts_json(ticker)
+    if cat_data is None:
+        raise ValueError(f"No catalysts file for {ticker}.")
+
+    for cat in cat_data.get("catalysts", []):
+        if cat.get("id") == catalyst_id:
+            if notes is not None:
+                cat["notes"] = notes
+            if event is not None:
+                cat["event"] = event
+            if expected_date is not None:
+                cat["expected_date"] = expected_date
+            if expected_impact is not None:
+                cat["expected_impact"] = expected_impact
+            _save_json(d / "catalysts.json", cat_data)
+            return cat
+
+    raise ValueError(f"Catalyst ID {catalyst_id} not found for {ticker}.")
+
+
+def delete_catalyst(ticker: str, catalyst_id: int) -> None:
+    """Remove a catalyst entry by ID."""
+    ticker = ticker.upper()
+    d = _thesis_dir(ticker)
+    cat_data = _load_catalysts_json(ticker)
+    if cat_data is None:
+        raise ValueError(f"No catalysts file for {ticker}.")
+
+    original_len = len(cat_data.get("catalysts", []))
+    cat_data["catalysts"] = [
+        c for c in cat_data.get("catalysts", []) if c.get("id") != catalyst_id
+    ]
+    if len(cat_data["catalysts"]) == original_len:
+        raise ValueError(f"Catalyst ID {catalyst_id} not found for {ticker}.")
+    _save_json(d / "catalysts.json", cat_data)
+
+
 def add_thesis_update(
     ticker: str,
     *,

@@ -15,12 +15,14 @@ Environment variables:
 
 from __future__ import annotations
 
+import glob
 import logging
 import os
-import shlex
 import subprocess
 import sys
 import time
+
+import yaml
 
 # Add project root to path so we can import skills._lib
 PROJECT_DIR = os.environ.get("PFS_PROJECT_DIR", "/opt/pfs")
@@ -37,18 +39,42 @@ log = logging.getLogger("dispatcher")
 
 POLL_INTERVAL = int(os.environ.get("PFS_POLL_INTERVAL", "60"))
 TASK_TIMEOUT = int(os.environ.get("PFS_TASK_TIMEOUT", "600"))
+SKILLS_DIR = os.path.join(PROJECT_DIR, "skills")
 
-# Skill → script mapping for non-intelligence tasks
-SCRIPT_MAP: dict[str, str] = {
-    "company-profile:build_comps": "skills/company-profile/scripts/build_comps.py",
-    "company-profile:generate_report": "skills/company-profile/scripts/generate_report.py",
-    "thesis-tracker:create": "skills/thesis-tracker/scripts/thesis_cli.py",
-    "thesis-tracker:update": "skills/thesis-tracker/scripts/thesis_cli.py",
-    "thesis-tracker:check": "skills/thesis-tracker/scripts/thesis_cli.py",
-    "thesis-tracker:catalyst": "skills/thesis-tracker/scripts/thesis_cli.py",
-    "thesis-tracker:report": "skills/thesis-tracker/scripts/thesis_cli.py",
-    "etl-coverage:check": "skills/etl-coverage/scripts/check_coverage.py",
-}
+
+# ── Skill config loading ────────────────────────────────────────────────────
+
+
+def load_skill_configs() -> dict[str, dict]:
+    """Discover and load all ``config.yaml`` files under ``skills/``.
+
+    Returns a dict keyed by skill name (e.g. ``"company-profile"``).
+    """
+    configs: dict[str, dict] = {}
+    pattern = os.path.join(SKILLS_DIR, "*/config.yaml")
+    for path in sorted(glob.glob(pattern)):
+        with open(path, "r", encoding="utf-8") as fh:
+            cfg = yaml.safe_load(fh)
+        if cfg and isinstance(cfg, dict) and "name" in cfg:
+            configs[cfg["name"]] = cfg
+            cfg["_dir"] = os.path.dirname(path)
+            log.debug("Loaded skill config: %s from %s", cfg["name"], path)
+    return configs
+
+
+# Loaded once at startup, can be refreshed via SIGHUP or restart
+SKILL_CONFIGS: dict[str, dict] = {}
+
+
+def _discover_scripts(skill_dir: str) -> dict[str, str]:
+    """Return a mapping of script basenames (minus .py) → full paths."""
+    scripts_dir = os.path.join(skill_dir, "scripts")
+    result: dict[str, str] = {}
+    if os.path.isdir(scripts_dir):
+        for fname in os.listdir(scripts_dir):
+            if fname.endswith(".py"):
+                result[fname[:-3]] = os.path.join(scripts_dir, fname)
+    return result
 
 
 def build_prompt(task: dict) -> str:
@@ -70,23 +96,58 @@ def build_prompt(task: dict) -> str:
 
 
 def resolve_script(task: dict) -> list[str]:
-    """Resolve a task to a script command + arguments."""
-    key = f"{task['skill']}:{task.get('action', '')}"
-    script = SCRIPT_MAP.get(key)
-    if not script:
-        raise ValueError(f"No script mapping for task key: {key}")
+    """Resolve a task to a script command + arguments using config.yaml.
 
-    cmd = ["uv", "run", "python", script]
+    Discovery order:
+    1. If the skill has a script matching the action name, use it directly.
+    2. If the skill has a ``*_cli.py``-style unified CLI, use it with
+       the action as a subcommand.
+    3. If the skill has only one script and no CLI, run it without subcommands.
+    """
+    skill_name = task.get("skill", "")
+    action = task.get("action", "").split()[0]  # strip flags like "check --all" → "check"
+    cfg = SKILL_CONFIGS.get(skill_name)
 
-    # For thesis_cli, the action is the subcommand
-    if "thesis_cli" in script:
-        action = task.get("action", "")
-        cmd.append(action)
+    if not cfg:
+        raise ValueError(f"Unknown skill: {skill_name!r} — no config.yaml found")
 
-    if task.get("ticker"):
-        cmd.append(task["ticker"])
+    skill_dir = cfg["_dir"]
+    scripts = _discover_scripts(skill_dir)
 
-    return cmd
+    if not scripts:
+        raise ValueError(f"Skill {skill_name!r} has no scripts in {skill_dir}/scripts/")
+
+    # Strategy 1: exact match on action name (e.g. action="build_comps" → build_comps.py)
+    if action in scripts:
+        cmd = ["uv", "run", "python", scripts[action]]
+        if task.get("ticker"):
+            cmd.append(task["ticker"])
+        return cmd
+
+    # Strategy 2: unified CLI — a script with "cli" in the name takes subcommands
+    cli_scripts = [s for s in scripts if "cli" in s]
+    if cli_scripts:
+        script_path = scripts[cli_scripts[0]]
+        cmd = ["uv", "run", "python", script_path]
+        if action:
+            cmd.append(action)
+        if task.get("ticker"):
+            cmd.append(task["ticker"])
+        return cmd
+
+    # Strategy 3: single script — run it directly (no subcommand)
+    if len(scripts) == 1:
+        script_path = next(iter(scripts.values()))
+        cmd = ["uv", "run", "python", script_path]
+        if task.get("ticker"):
+            cmd.append(task["ticker"])
+        return cmd
+
+    # Multiple scripts, no CLI, no action match
+    raise ValueError(
+        f"Cannot resolve action {action!r} for skill {skill_name!r}. "
+        f"Available scripts: {list(scripts.keys())}"
+    )
 
 
 def commit_artifacts(task: dict) -> str | None:
@@ -158,8 +219,14 @@ def execute_task(client: TaskClient, task: dict) -> None:
         log.warning("Task %d already claimed, skipping", task_id)
         return
 
+    # Determine intelligence requirement: task field > config.yaml > default True
+    requires_intel = task.get("requires_intelligence")
+    if requires_intel is None:
+        cfg = SKILL_CONFIGS.get(skill, {})
+        requires_intel = cfg.get("requires_intelligence", True)
+
     try:
-        if task.get("requires_intelligence", True):
+        if requires_intel:
             # Send to OpenClaw via CLI
             prompt = build_prompt(task)
             log.info("Sending to OpenClaw: %s", prompt[:100])
@@ -207,11 +274,53 @@ def execute_task(client: TaskClient, task: dict) -> None:
             log.exception("Failed to report task %d failure to API", task_id)
 
 
+def match_event_to_skills(event: str, event_data: dict) -> list[dict]:
+    """Given an event name and data, return matching skill+action pairs.
+
+    Scans all loaded config.yaml triggers to find skills that should run.
+    Returns a list of dicts with ``skill``, ``action``, and ``requires_intelligence``.
+    """
+    matches = []
+    for name, cfg in SKILL_CONFIGS.items():
+        for trigger in cfg.get("triggers", []):
+            if trigger.get("event") != event:
+                continue
+
+            # Check filter criteria
+            filt = trigger.get("filter", {})
+            matched = True
+            for key, expected in filt.items():
+                actual = event_data.get(key)
+                if isinstance(expected, list):
+                    if actual not in expected:
+                        matched = False
+                elif isinstance(expected, str) and expected.startswith(">"):
+                    threshold = float(expected[1:])
+                    if not (isinstance(actual, (int, float)) and actual > threshold):
+                        matched = False
+                elif actual != expected:
+                    matched = False
+
+            if matched:
+                matches.append({
+                    "skill": name,
+                    "action": trigger.get("action", ""),
+                    "requires_intelligence": cfg.get("requires_intelligence", True),
+                })
+    return matches
+
+
 def main():
+    global SKILL_CONFIGS
+
     api_url = os.environ.get("PFS_API_URL")
     if not api_url:
         log.error("PFS_API_URL environment variable is required")
         sys.exit(1)
+
+    # Load skill configs from config.yaml files
+    SKILL_CONFIGS = load_skill_configs()
+    log.info("Loaded %d skill configs: %s", len(SKILL_CONFIGS), list(SKILL_CONFIGS.keys()))
 
     client = TaskClient(base_url=api_url)
     log.info("Dispatcher started — polling %s every %ds", api_url, POLL_INTERVAL)

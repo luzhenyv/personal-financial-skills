@@ -27,6 +27,7 @@ from dashboard.components.loaders.thesis import load_thesis_page_data
 from dashboard.components.tabs.thesis_summary_tab import render_thesis_summary_tab
 from dashboard.components.tabs.thesis_updates_tab import render_thesis_updates_tab
 from dashboard.components.tabs.thesis_health_tab import render_thesis_health_tab
+from dashboard.components.tabs.thesis_edit_tab import render_thesis_edit_tab
 
 # ──────────────────────────────────────────────
 # Page config & styles
@@ -142,8 +143,8 @@ st.markdown(kpi_html, unsafe_allow_html=True)
 # Tabs
 # ──────────────────────────────────────────────
 
-tab_summary, tab_updates, tab_health = st.tabs(
-    ["📋 Thesis Summary", "📝 Update Log", "📊 Health Dashboard"]
+tab_summary, tab_updates, tab_health, tab_edit = st.tabs(
+    ["📋 Thesis Summary", "📝 Update Log", "📊 Health Dashboard", "✏️ Edit"]
 )
 
 with tab_summary:
@@ -154,6 +155,9 @@ with tab_updates:
 
 with tab_health:
     render_thesis_health_tab(d)
+
+with tab_edit:
+    render_thesis_edit_tab(d)
 
 # ──────────────────────────────────────────────
 # Downloads

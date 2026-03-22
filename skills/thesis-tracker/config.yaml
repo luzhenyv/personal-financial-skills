@@ -1,0 +1,33 @@
+name: thesis-tracker
+version: "1.0"
+description: "Create, update, and health-check investment theses"
+
+triggers:
+  - event: new_filing
+    filter: {form_type: ["10-K", "10-Q"]}
+    action: check
+  - event: price_alert
+    filter: {change_pct_abs: ">5"}
+    action: check
+  - cron: "0 10 * * 6"
+    action: check --all
+
+inputs:
+  mcp_tools:
+    - get_company
+    - get_financial_metrics
+    - get_income_statements
+    - get_prices
+  artifacts:
+    - "{ticker}/profile/profile.json"
+
+outputs:
+  path: "data/artifacts/{ticker}/thesis/"
+  files:
+    - thesis.json
+    - updates.json
+    - health_checks.json
+    - catalysts.json
+    - thesis_report.md
+
+requires_intelligence: true
