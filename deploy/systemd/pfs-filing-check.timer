@@ -1,0 +1,11 @@
+[Unit]
+Description=Mini Bloomberg — Check for new SEC filings
+
+[Timer]
+# Daily at 06:00 ET (11:00 UTC EST / 10:00 UTC EDT)
+OnCalendar=*-*-* 10:00 UTC
+Persistent=true
+RandomizedDelaySec=600
+
+[Install]
+WantedBy=timers.target

@@ -1,0 +1,15 @@
+[Unit]
+Description=Mini Bloomberg — Check for new SEC filings
+After=network-online.target postgresql.service
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+WorkingDirectory=/opt/pfs
+ExecStart=/opt/pfs/deploy/scripts/check-new-filings.sh
+EnvironmentFile=/opt/pfs/.env
+TimeoutStartSec=300
+
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=pfs-filing-check

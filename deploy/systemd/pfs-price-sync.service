@@ -1,0 +1,16 @@
+[Unit]
+Description=Mini Bloomberg — Price sync job
+After=network-online.target postgresql.service
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+WorkingDirectory=/opt/pfs
+ExecStart=/root/.local/bin/uv run python -m src.etl.pipeline sync-prices
+EnvironmentFile=/opt/pfs/.env
+TimeoutStartSec=600
+
+# Log output
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=pfs-price-sync

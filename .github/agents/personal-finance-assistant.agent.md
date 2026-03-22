@@ -312,3 +312,4 @@ uv run python skills/thesis-tracker/scripts/thesis_cli.py check   {TICKER}      
 uv run python skills/thesis-tracker/scripts/thesis_cli.py catalyst {TICKER} --add         # Task 4
 uv run python skills/thesis-tracker/scripts/thesis_cli.py report  {TICKER}               # Post-task
 ```
+ 

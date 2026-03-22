@@ -1,0 +1,3 @@
+# Artifact repo .gitignore
+# Transient flag files (consumed by OpenClaw cron, not worth versioning)
+_flags/
