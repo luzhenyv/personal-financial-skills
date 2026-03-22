@@ -1,15 +1,10 @@
 # Personal Financial Skills — Mini Bloomberg
 
-A personal investor toolkit built around three decoupled planes: a **Mini Bloomberg** data engine, an **AI Agent** layer that generates analysis artifacts, and a **Streamlit** dashboard for review.
-
-> Adapted from [financial-services-plugins](https://github.com/anthropics/financial-services-plugins) —
-> institutional-grade skills refactored for personal use.
+A one-person AI-powered equity research platform built around three decoupled planes: a **Mini Bloomberg** data engine (PostgreSQL + ETL), an **AI Agent** layer that generates analysis artifacts, and a **Streamlit** dashboard for review.
 
 ---
 
-## System Architecture
-
-The system is organized into three planes that never bleed into each other.
+## Architecture
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
@@ -30,21 +25,26 @@ The system is organized into three planes that never bleed into each other.
 
 **Three hard boundaries:**
 - Streamlit **never writes** — it only reads artifacts and calls the API
-- The Agent **never touches PostgreSQL** — it reads through the MCP contract
+- The Agent **never touches PostgreSQL** — it reads through MCP / REST API
 - ETL **never calls the Agent** — data ingestion is a separate, scheduled process
 
-For a detailed walkthrough see [`docs/architecture.md`](docs/architecture.md).
+### Two-Server Topology (Target)
 
----
+| Concern | Data Server | Agent Server |
+|---------|-------------|--------------|
+| PostgreSQL + pgAdmin | Docker | — |
+| FastAPI (`:8000`) | Native | — |
+| MCP Server (`:8001`) | Native (HTTP transport) | — |
+| ETL Pipeline | Native | — |
+| Prefect (`:4200`) | Native | — |
+| Streamlit (`:8501`) | — | Service |
+| Task Dispatcher | — | Service (polls REST API) |
+| OpenClaw Agent | — | Installed |
+| Artifact Git Repo | — | Separate `.git` |
 
-## Entry Points
+> **Hard rule**: The Agent Server has **zero** database dependencies — all data access goes through REST API or MCP HTTP.
 
-| Entry Point | Purpose |
-|---|---|
-| **Airflow / CLI** | Schedule ETL pipelines, S&P 500 batch ingestion, daily price sync, earnings watch |
-| **Chat UI** | Interact with the Agent — generate profiles, request thesis drafts, ask questions |
-| **REST API** | Direct HTTP calls to trigger ingestion or fetch structured data |
-| **Git** | Version-control all analysis artifacts; edit `.md` / `.json` directly or ask the Agent to patch |
+For full design details see [`docs/architecture.md`](docs/architecture.md) and [`docs/migration-plan.md`](docs/migration-plan.md).
 
 ---
 
@@ -52,101 +52,105 @@ For a detailed walkthrough see [`docs/architecture.md`](docs/architecture.md).
 
 ```
 SEC EDGAR ──┐
-yfinance  ──┼──► Mini Bloomberg ETL ──► PostgreSQL (schemas: market_data,
-Alpha Vantage┘    raw/ filesystem              fundamentals, metrics, etl_audit)
+yfinance  ──┼──► ETL Pipeline ──► PostgreSQL (market_data, fundamentals,
+Alpha Vantage┘    data/raw/                    metrics, etl_audit)
                                                     │
-                                      MCP Server (FastAPI) ◄── read-only
+                                      FastAPI :8000 + MCP :8001  ◄── read-only
                                                     │
                                              Agent + Skills
                                                     │
-                                         artifacts/{ticker}/
+                                         data/artifacts/{ticker}/
                                          ├── profile/   (.md + .json)
-                                         ├── thesis/    (v1 → vN .md)
-                                         ├── earnings/  (.md + .json)
-                                         └── news/      (DATE.md)
+                                         ├── thesis/    (versioned .json)
+                                         └── ...
                                                     │
                                            Streamlit Dashboard
 ```
 
-### Data Source Trust Chain
+**Data source priority**: `MCP (PostgreSQL) > local SEC files > Alpha Vantage > yfinance > web search`
 
-When the Agent fetches data, it follows this priority order:
+---
+
+## Project Structure
 
 ```
-MCP (PostgreSQL) > local SEC files > Alpha Vantage > yfinance > web search
+personal-financial-skills/
+├── pfs/                           # Python package (Data Server)
+│   ├── api/                       #   FastAPI app + routers
+│   │   └── routers/               #     companies, financials, filings, etl,
+│   │                              #     analysis (heavy compute), tasks (CRUD)
+│   ├── db/                        #   SQLAlchemy models + session + schema
+│   ├── etl/                       #   ETL pipeline + SEC/price/yfinance clients
+│   ├── mcp/                       #   MCP server (HTTP transport)
+│   ├── analysis/                  #   Heavy compute (profile, valuation, report)
+│   ├── tasks/                     #   Task queue models
+│   ├── config.py                  #   App configuration
+│   └── splits.py                  #   Stock split adjustments
+│
+├── skills/                        # Agent skills (Agent Server)
+│   ├── _lib/                      #   Shared skill utilities (no pfs.* imports)
+│   │   ├── thesis_io.py           #     Local JSON I/O for thesis artifacts
+│   │   ├── artifact_io.py         #     Generic artifact read/write
+│   │   ├── api_client.py          #     HTTP client for Data Server REST API
+│   │   ├── task_client.py         #     HTTP client for task CRUD
+│   │   └── mcp_helpers.py         #     Common MCP call patterns
+│   ├── company-profile/           #   Company tearsheet generation
+│   ├── thesis-tracker/            #   Investment thesis CRUD + health checks
+│   └── etl-coverage/              #   Data coverage auditing
+│
+├── dashboard/                     # Streamlit app (Agent Server)
+│   ├── app.py                     #   Main entry point
+│   ├── pages/                     #   Company Profile, Thesis Tracker, Agent Chat
+│   └── components/                #   Tabs, loaders, styles, utils
+│
+├── agents/                        # Agent configurations
+│   ├── task_dispatcher.py         #   Polls /api/tasks/next, dispatches to OpenClaw
+│   ├── openclaw/                  #   Production agent persona + artifact gitignore
+│   ├── copilot/                   #   GitHub Copilot agent config
+│   └── prompts/                   #   Shared prompt templates (commit-on-write)
+│
+├── prefect/                       # Prefect flows (Data Server)
+│   └── flows/                     #   price_sync, filing_check, data_validation
+│
+├── deploy/
+│   ├── docker/                    #   docker-compose.data.yml (PostgreSQL + pgAdmin)
+│   ├── systemd/                   #   pfs-streamlit, pfs-task-dispatcher
+│   ├── postgres/                  #   PostgreSQL tuning config
+│   └── scripts/                   #   setup-data-server, setup-agent-server,
+│                                  #   setup-openclaw, deploy
+│
+├── data/
+│   ├── raw/                       #   SEC filings (Data Server)
+│   ├── artifacts/                 #   Agent output (Agent Server, git-tracked)
+│   └── reports/                   #   Generated reports
+│
+├── tests/                         # pytest test suite
+├── docs/                          # Architecture, API, quickstart, migration plan
+└── scripts/                       # Utility scripts
 ```
-
-MCP-sourced data is the most trustworthy — it has already been validated and conflict-resolved during ETL. Local SEC files (in `data/raw/`) are the fallback when structured data is missing. Alpha Vantage provides reliable market data, followed by yfinance. Web search is the last resort.
 
 ---
 
 ## Skills
 
-Agent-readable skill definitions live in `skills/`. Each skill has a single input contract and writes to exactly one artifact path. Skills never call each other directly.
+Each skill has a `SKILL.md` with instructions, a `config.yaml` for trigger definitions, and scripts for execution. Skills write to exactly one artifact path and never call each other directly.
 
-| Skill | Input | Output | Status |
-|---|---|---|---|
-| `company-profile` | MCP financials | `artifacts/{t}/profile/YYYY-QN.md+json` | ✅ Ready |
-| `financial-etl` | SEC XBRL | PostgreSQL + `raw/` | ✅ Ready |
-| `investment-thesis` | Profile JSON + user notes | `artifacts/{t}/thesis/vN.md` | 🔜 Planned |
-| `earnings-analysis` | New 10-Q/8-K + prior thesis | `artifacts/{t}/earnings/YYYY-QN.md` | 🔜 Planned |
-| `news-monitor` | Web search results | `artifacts/{t}/news/DATE_slug.md` | 🔜 Planned |
-| `trade-advisor` | Thesis + price + technicals | Advisory text (ephemeral) | 🔜 Planned |
-| `three-statements` | MCP financials | 3-statement model artifact | 🔜 Planned |
-| `dcf-valuation` | 3-statement model | DCF artifact with scenarios | 🔜 Planned |
-| `comps-analysis` | Peer tickers | Comparable company table | 🔜 Planned |
-| `stock-screening` | Filter criteria | Screener results | 🔜 Planned |
-| `portfolio-monitoring` | Holdings + prices | P&L report | 🔜 Planned |
-
----
-
-## Artifact Store
-
-All agent-generated analysis is stored as git-tracked files under `artifacts/`:
-
-```
-artifacts/
-  NVDA/
-    profile/
-      2025-Q4.md          # markdown tearsheet
-      2025-Q4.json        # structured data (rendered by Streamlit)
-    thesis/
-      v1_2025-11-01.md    # initial draft
-      v2_2025-11-15.md    # after user edits or earnings update
-    earnings/
-      2025-Q4_call.md
-      2025-Q4_call.json
-    news/
-      2025-11-15_antitrust.md
-```
-
-Every JSON artifact includes a `schema_version` field so Streamlit rendering stays stable across schema changes. Users may edit `.md` or `.json` files directly in git, or ask the Agent to apply a patch.
-
----
-
-## Streamlit Pages
-
-| Page | Data Source |
-|---|---|
-| Company Profile | `artifacts/{ticker}/profile/*.json` + price API |
-| Investment Thesis | `artifacts/{ticker}/thesis/` (versioned) |
-| Earnings Feed | `artifacts/{ticker}/earnings/` timeline |
-| Watchlist | Portfolio holdings + trade signals |
-| Trade Signals | Technicals API (MACD, RSI) |
-| ETL Status | `etl_audit` schema — last run times, gaps |
+| Skill | Output | Status |
+|---|---|---|
+| `company-profile` | `data/artifacts/{ticker}/profile/` | ✅ Ready |
+| `thesis-tracker` | `data/artifacts/{ticker}/thesis/` | ✅ Ready |
+| `etl-coverage` | `data/artifacts/_etl/` | ✅ Ready |
 
 ---
 
 ## Quick Start
 
-See [`docs/quickstart.md`](docs/quickstart.md) for full setup. The short version:
-
 ```bash
 # 1. Configure environment
-cp .env.example .env          # set SEC_USER_AGENT to your email
+cp .env.example .env              # set SEC_USER_AGENT to your email
 
 # 2. Start PostgreSQL
-docker compose up -d postgres
+docker compose -f deploy/docker/docker-compose.data.yml up -d
 
 # 3. Install dependencies
 uv sync
@@ -154,34 +158,72 @@ uv sync
 # 4. Ingest a company
 uv run python -m pfs.etl.pipeline ingest NVDA --years 5
 
-# 5. Start API + Streamlit
-docker compose up -d          # → http://localhost:8000/docs
-                              # → http://localhost:8501
+# 5. Start the API
+uv run uvicorn pfs.api.app:app --reload
+# → http://localhost:8000/docs
+
+# 6. Start Streamlit
+uv run streamlit run dashboard/app.py
+# → http://localhost:8501
+```
+
+See [`docs/quickstart.md`](docs/quickstart.md) for the full guide.
+
+---
+
+## Key Commands
+
+```bash
+# ETL
+uv run python -m pfs.etl.pipeline ingest {TICKER} --years 5
+uv run python -m pfs.etl.pipeline sync-prices
+uv run python -m pfs.etl.section_extractor {TICKER}
+
+# Company profile
+uv run python skills/company-profile/scripts/build_comps.py {TICKER}
+uv run python skills/company-profile/scripts/generate_report.py {TICKER}
+
+# Investment thesis (unified CLI)
+uv run python skills/thesis-tracker/scripts/thesis_cli.py create  {TICKER} --interactive
+uv run python skills/thesis-tracker/scripts/thesis_cli.py update  {TICKER} --interactive
+uv run python skills/thesis-tracker/scripts/thesis_cli.py check   {TICKER}
+uv run python skills/thesis-tracker/scripts/thesis_cli.py catalyst {TICKER} --add
+uv run python skills/thesis-tracker/scripts/thesis_cli.py report  {TICKER}
+
+# MCP Server
+uv run python -m pfs.mcp.server
 ```
 
 ---
 
 ## API Reference
 
-See [`docs/api.md`](docs/api.md) for full endpoint documentation.
+See [`docs/api.md`](docs/api.md) for full documentation.
 
 | Method | Path | Description |
 |---|---|---|
-| `GET` | `/health` | Server health check |
+| `GET` | `/health` | Health check |
 | `GET` | `/api/companies/` | List all ingested companies |
-| `GET` | `/api/companies/{ticker}` | Get a single company |
+| `GET` | `/api/companies/{ticker}` | Company details |
 | `POST` | `/api/etl/ingest` | Trigger ETL for a ticker |
 | `POST` | `/api/etl/sync-prices` | Sync daily prices |
 | `GET` | `/api/etl/runs` | ETL run history |
 | `GET` | `/api/filings/{ticker}` | List SEC filings |
-| `GET` | `/api/filings/{ticker}/{filing_id}` | Get a single filing |
-| `GET` | `/api/filings/{ticker}/{filing_id}/content` | Stream raw filing HTML |
+| `GET` | `/api/filings/{ticker}/{id}/content` | Raw filing HTML |
 | `GET` | `/api/financials/{ticker}/income-statements` | Income statements |
 | `GET` | `/api/financials/{ticker}/balance-sheets` | Balance sheets |
 | `GET` | `/api/financials/{ticker}/cash-flows` | Cash flow statements |
-| `GET` | `/api/financials/{ticker}/metrics` | Computed metrics (P/E, EV/EBITDA…) |
+| `GET` | `/api/financials/{ticker}/metrics` | Computed metrics |
 | `GET` | `/api/financials/{ticker}/prices` | Price history |
 | `GET` | `/api/financials/{ticker}/segments` | Revenue segments |
+| `GET` | `/api/analysis/profile/{ticker}` | Company profile data |
+| `GET` | `/api/analysis/valuation/{ticker}` | DCF + sensitivity + comps |
+| `GET` | `/api/analysis/coverage/{ticker}` | ETL coverage report |
+| `GET` | `/api/analysis/current-price/{ticker}` | Current stock price |
+| `GET` | `/api/tasks/` | List tasks |
+| `GET` | `/api/tasks/schedule` | All recurring tasks |
+| `GET` | `/api/tasks/next` | Next pending task (dispatcher) |
+| `POST` | `/api/tasks/` | Create a task |
 
 ---
 
@@ -191,25 +233,14 @@ See [`docs/api.md`](docs/api.md) for full endpoint documentation.
 |---|---|
 | Database | PostgreSQL 16 (Docker) |
 | ETL | Python + httpx + SEC EDGAR XBRL API |
-| Validation | yfinance |
-| Conflict resolution | Alpha Vantage API |
-| Backend / MCP | FastAPI |
-| Agent | Claude + Skills (Markdown) |
+| Conflict resolution | Alpha Vantage API + yfinance |
+| Backend API | FastAPI |
+| MCP Server | FastMCP (HTTP transport) |
+| Agent | Claude + Skills |
+| Scheduling | Prefect |
 | Dashboard | Streamlit + Plotly |
-| Artifact versioning | Git |
-| Scheduling | Airflow (planned) |
-
----
-
-## Cost
-
-| Item | Cost |
-|---|---|
-| SEC EDGAR API | Free |
-| yfinance | Free |
-| Alpha Vantage (optional) | $0–50/mo |
-| PostgreSQL (Docker) | Free |
-| **Total** | **~$0–50/mo** |
+| Artifact versioning | Git (commit-on-write) |
+| Package manager | uv |
 
 ---
 
@@ -217,11 +248,11 @@ See [`docs/api.md`](docs/api.md) for full endpoint documentation.
 
 | Doc | Contents |
 |---|---|
-| [`docs/architecture.md`](docs/architecture.md) | Full system design, decoupling rules, data plane details |
-| [`docs/quickstart.md`](docs/quickstart.md) | Step-by-step setup and first ingest |
-| [`docs/api.md`](docs/api.md) | Full API endpoint reference |
+| [`docs/architecture.md`](docs/architecture.md) | System design, three-plane decoupling, data flow |
+| [`docs/quickstart.md`](docs/quickstart.md) | Setup and first ingest |
+| [`docs/api.md`](docs/api.md) | API endpoint reference |
 | [`docs/artifact-schema.md`](docs/artifact-schema.md) | JSON schema for each artifact type |
-| [`docs/skills.md`](docs/skills.md) | How to write and extend skills |
+| [`docs/migration-plan.md`](docs/migration-plan.md) | Two-server migration plan + skill-platform boundary |
 
 ---
 

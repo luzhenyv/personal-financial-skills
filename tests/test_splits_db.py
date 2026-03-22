@@ -1,4 +1,4 @@
-"""Integration tests for src/splits.py against the live DB."""
+"""Integration tests for pfs/splits.py against the live DB."""
 
 import pytest
 from datetime import date

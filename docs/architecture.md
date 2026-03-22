@@ -89,25 +89,24 @@ Streamlit is a pure read layer. It renders artifacts and calls the MCP API for l
 
 ## Entry Points
 
-### Airflow / CLI
+### Prefect / CLI
 
-Used to schedule and trigger ETL operations. Airflow is the planned production scheduler; CLI commands are available for local development.
+Used to schedule and trigger ETL operations. Prefect handles mechanical scheduling on the Data Server; CLI commands are available for local development.
 
 ```bash
 # Ingest a single company
 uv run python -m pfs.etl.pipeline ingest NVDA --years 5
 
-# Batch ingest all S&P 500 companies
-uv run python -m pfs.etl.pipeline ingest-sp500
-
 # Refresh daily prices
 uv run python -m pfs.etl.pipeline sync-prices
-
-# Watch for new earnings filings
-uv run python -m pfs.etl.pipeline watch-earnings
 ```
 
-**Rule: Airflow/CLI is the only way to trigger ETL.** The MCP API does not expose an ingest endpoint that the Agent can call. This prevents the Agent from accidentally re-triggering expensive ETL operations.
+Prefect flows (in `prefect/flows/`) handle recurring tasks:
+- **price_sync** — daily price updates (M-F after market close)
+- **filing_check** — daily SEC EDGAR scan for new filings
+- **data_validation** — weekly cross-checks
+
+**Rule: Prefect/CLI is the only way to trigger ETL.** The Agent cannot trigger ETL — if data is missing, it tells the user to run the ingest command.
 
 ### Chat UI
 
@@ -119,7 +118,7 @@ The Chat UI is the interface for interacting with the Agent. Users can:
 
 ### Git
 
-All artifacts in `artifacts/` are git-tracked. This provides:
+All artifacts in `data/artifacts/` are git-tracked. This provides:
 - Full version history of every thesis, profile, and earnings report
 - The ability to diff any two versions of a thesis
 - A clear audit trail of when and why analysis changed
@@ -197,40 +196,30 @@ These six rules keep the system decoupled as it grows. Violating any of them ten
 
 ```
 1. INGEST
-   Airflow triggers ETL for NVDA
+   Prefect or CLI triggers ETL for NVDA
    → SEC EDGAR XBRL parsed → validated via yfinance
    → conflicts resolved via Alpha Vantage
-   → PostgreSQL updated, raw files saved
+   → PostgreSQL updated, raw files saved to data/raw/
 
 2. PROFILE
    User asks Agent: "Generate a profile for NVDA"
    → Agent calls MCP: get_financials(), get_metrics(), get_prices()
    → Falls back to raw SEC parse for any missing fields
-   → Writes artifacts/NVDA/profile/2025-Q4.md + .json
+   → Writes data/artifacts/NVDA/profile/ (.md + .json)
 
 3. THESIS
-   User asks Agent: "Draft an investment thesis for NVDA"
-   → Agent reads profile JSON
-   → Generates artifacts/NVDA/thesis/v1_2025-11-15.md
-   → User reviews, edits directly in git or asks Agent to revise
+   User asks Agent: "Create thesis for NVDA"
+   → Agent reads MCP data + profile artifacts
+   → Generates data/artifacts/NVDA/thesis/ (.json files)
+   → Agent commits artifacts (commit-on-write)
 
 4. MONITOR
-   New 10-Q filed → Airflow detects via earnings watch
-   → ETL ingests updated financials
-   → Agent runs earnings-analysis skill
-   → Writes artifacts/NVDA/earnings/2025-Q4_call.md
-   → Agent evaluates: does this change the thesis?
-   → If yes: writes artifacts/NVDA/thesis/v2_2025-12-01.md
+   Prefect filing_check detects new 10-Q → creates task in registry
+   → Task dispatcher routes to Agent
+   → Agent runs health check, updates thesis artifacts
 
-5. TRADE
-   User asks: "Is now a good time to add to NVDA?"
-   → Agent reads current thesis + calls MCP for MACD/RSI
-   → Returns advisory text with entry/sizing rationale
-   → Advisory is ephemeral — not saved as artifact
-
-6. REVIEW
+5. REVIEW
    User opens Streamlit → Company Profile page
-   → Renders 2025-Q4.json metrics table + price chart
-   → Thesis page shows v1 → v2 diff
-   → Earnings Feed shows the Q4 call summary
+   → Renders profile JSON metrics + price chart
+   → Thesis page shows thesis detail + health check history
 ```

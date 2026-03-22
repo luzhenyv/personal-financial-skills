@@ -37,9 +37,6 @@ dev = [
     "pytest-asyncio>=0.24",
     "ruff>=0.8",
 ]
-airflow = [
-    "apache-airflow>=2.10",
-]
 
 [tool.ruff]
 line-length = 100
