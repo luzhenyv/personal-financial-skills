@@ -152,7 +152,7 @@ docker compose up -d postgres
 uv sync
 
 # 4. Ingest a company
-uv run python -m src.etl.pipeline ingest NVDA --years 5
+uv run python -m pfs.etl.pipeline ingest NVDA --years 5
 
 # 5. Start API + Streamlit
 docker compose up -d          # → http://localhost:8000/docs

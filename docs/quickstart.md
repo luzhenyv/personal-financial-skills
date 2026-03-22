@@ -50,7 +50,7 @@ uv sync
 
 ```bash
 # Ingest 5 years of NVDA filings
-uv run python -m src.etl.pipeline ingest NVDA --years 5
+uv run python -m pfs.etl.pipeline ingest NVDA --years 5
 ```
 
 This will:
@@ -64,7 +64,7 @@ This will:
 To batch-ingest all S&P 500 companies (takes time):
 
 ```bash
-uv run python -m src.etl.pipeline ingest-sp500
+uv run python -m pfs.etl.pipeline ingest-sp500
 ```
 
 ---
@@ -74,7 +74,7 @@ uv run python -m src.etl.pipeline ingest-sp500
 Via Python:
 
 ```python
-from src.analysis.company_profile import generate_tearsheet
+from pfs.analysis.company_profile import generate_tearsheet
 
 md = generate_tearsheet("NVDA")
 print(md)
@@ -93,7 +93,7 @@ The profile is saved to `artifacts/NVDA/profile/`.
 ## 6. Start the API
 
 ```bash
-uv run uvicorn src.api.app:app --reload
+uv run uvicorn pfs.api.app:app --reload
 # → http://localhost:8000/docs
 ```
 
@@ -102,7 +102,7 @@ uv run uvicorn src.api.app:app --reload
 ## 7. Start Streamlit
 
 ```bash
-uv run streamlit run streamlit_app/app.py
+uv run streamlit run dashboard/app.py
 # → http://localhost:8501
 ```
 

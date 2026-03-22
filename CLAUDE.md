@@ -23,14 +23,14 @@ Plane 3 · PRESENTATION PLANE (Streamlit)
 
 **Rules you must follow:**
 - **Never write to PostgreSQL** — read through MCP tools only
-- **Never trigger ETL** — if data is missing, tell the user to run `uv run python -m src.etl.pipeline ingest {TICKER}`
+- **Never trigger ETL** — if data is missing, tell the user to run `uv run python -m pfs.etl.pipeline ingest {TICKER}`
 - **Write artifacts only** — output goes to `data/artifacts/{ticker}/` subfolders
 
 ## MCP Server
 
 The `personal-finance` MCP server provides access to the PostgreSQL data plane.
 
-**Run**: `uv run python -m src.mcp.server` (stdio transport)
+**Run**: `uv run python -m pfs.mcp.server` (stdio transport)
 
 ### Available MCP Tools
 
@@ -90,7 +90,7 @@ Every JSON artifact must include a `"schema_version": "1.0"` field. Markdown rep
 
 ### Generate a company profile
 1. Verify ticker exists: call MCP `list_companies` or `get_company(ticker)`
-2. If missing, tell user: `uv run python -m src.etl.pipeline ingest {TICKER} --years 5`
+2. If missing, tell user: `uv run python -m pfs.etl.pipeline ingest {TICKER} --years 5`
 3. Read `skills/company-profile/SKILL.md` and follow the 3-task workflow
 4. Output goes to `data/artifacts/{TICKER}/profile/`
 
@@ -107,8 +107,8 @@ Every JSON artifact must include a `"schema_version": "1.0"` field. Markdown rep
 Run scripts from the project root:
 ```bash
 # ETL (Data Plane — separate from agent)
-uv run python -m src.etl.pipeline ingest {TICKER} --years 5
-uv run python -m src.etl.pipeline sync-prices
+uv run python -m pfs.etl.pipeline ingest {TICKER} --years 5
+uv run python -m pfs.etl.pipeline sync-prices
 
 # Company profile scripts (Task 2 & 3 of company-profile skill)
 uv run python skills/company-profile/scripts/build_comps.py {TICKER}
@@ -122,7 +122,7 @@ uv run python skills/thesis-tracker/scripts/thesis_cli.py catalyst {TICKER} --ad
 uv run python skills/thesis-tracker/scripts/thesis_cli.py report  {TICKER}
 
 # Section extraction (run after ETL)
-uv run python -m src.etl.section_extractor {TICKER}
+uv run python -m pfs.etl.section_extractor {TICKER}
 ```
 
 ## Tech Stack

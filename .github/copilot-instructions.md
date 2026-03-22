@@ -54,7 +54,7 @@ All artifacts go to `data/artifacts/{ticker}/{skill}/`. Every JSON file must inc
 
 Tell the user to run ETL first:
 ```bash
-uv run python -m src.etl.pipeline ingest {TICKER} --years 5
+uv run python -m pfs.etl.pipeline ingest {TICKER} --years 5
 ```
 
 ## Agent
@@ -79,9 +79,9 @@ uv run python skills/thesis-tracker/scripts/thesis_cli.py catalyst {TICKER} --ad
 uv run python skills/thesis-tracker/scripts/thesis_cli.py report  {TICKER}
 
 # Section extraction
-uv run python -m src.etl.section_extractor {TICKER}
+uv run python -m pfs.etl.section_extractor {TICKER}
 
 # ETL
-uv run python -m src.etl.pipeline ingest {TICKER} --years 5
-uv run python -m src.etl.pipeline sync-prices
+uv run python -m pfs.etl.pipeline ingest {TICKER} --years 5
+uv run python -m pfs.etl.pipeline sync-prices
 ```

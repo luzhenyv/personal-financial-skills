@@ -2,10 +2,10 @@
 
 from unittest.mock import patch
 
-from src.etl.price_client import get_daily_prices, get_quote
+from pfs.etl.price_client import get_daily_prices, get_quote
 
 
-@patch("src.etl.price_client._fetch_yfinance")
+@patch("pfs.etl.price_client._fetch_yfinance")
 def test_get_daily_prices_yfinance_primary(mock_yf):
     """Default source uses yfinance."""
     mock_yf.return_value = [
@@ -28,9 +28,9 @@ def test_get_daily_prices_yfinance_primary(mock_yf):
     mock_yf.assert_called_once_with("NVDA", "1y")
 
 
-@patch("src.etl.price_client._fetch_yfinance")
-@patch("src.etl.price_client._fetch_alpha_vantage")
-@patch("src.etl.price_client.settings")
+@patch("pfs.etl.price_client._fetch_yfinance")
+@patch("pfs.etl.price_client._fetch_alpha_vantage")
+@patch("pfs.etl.price_client.settings")
 def test_get_daily_prices_fallback(mock_settings, mock_av, mock_yf):
     """Falls back to Alpha Vantage when yfinance fails and key is available."""
     mock_yf.return_value = []
@@ -53,8 +53,8 @@ def test_get_daily_prices_fallback(mock_settings, mock_av, mock_yf):
     mock_av.assert_called_once_with("NVDA", "full")
 
 
-@patch("src.etl.price_client._fetch_yfinance")
-@patch("src.etl.price_client.settings")
+@patch("pfs.etl.price_client._fetch_yfinance")
+@patch("pfs.etl.price_client.settings")
 def test_get_daily_prices_no_fallback(mock_settings, mock_yf):
     """Returns empty when yfinance fails and no AV key."""
     mock_yf.return_value = []
@@ -64,7 +64,7 @@ def test_get_daily_prices_no_fallback(mock_settings, mock_yf):
     assert result == []
 
 
-@patch("src.etl.price_client._quote_yfinance")
+@patch("pfs.etl.price_client._quote_yfinance")
 def test_get_quote_yfinance(mock_quote):
     """get_quote uses yfinance by default."""
     mock_quote.return_value = {

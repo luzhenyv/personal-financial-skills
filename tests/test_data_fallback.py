@@ -1,5 +1,5 @@
 """Quick smoke-test for data_fallback module."""
-from src.etl.data_fallback import fill_statement_gaps, _recompute_derived
+from pfs.etl.data_fallback import fill_statement_gaps, _recompute_derived
 
 
 def test_derived_fields():

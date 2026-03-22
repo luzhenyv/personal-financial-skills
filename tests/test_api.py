@@ -15,8 +15,8 @@ from unittest.mock import MagicMock, patch
 import pytest
 from fastapi.testclient import TestClient
 
-from src.api.app import app
-from src.db.session import get_db
+from pfs.api.app import app
+from pfs.db.session import get_db
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -78,7 +78,7 @@ def _make_db(*, first=None, all_rows=None):
 # Sample data
 # ─────────────────────────────────────────────────────────────────────────────
 
-from src.db.models import (
+from pfs.db.models import (
     BalanceSheet,
     CashFlowStatement,
     Company,
@@ -315,7 +315,7 @@ def test_ingest_trigger(client_with_db):
 
     app.dependency_overrides[get_db] = _db_gen
 
-    with patch("src.api.routers.etl.threading.Thread") as mock_thread:
+    with patch("pfs.api.routers.etl.threading.Thread") as mock_thread:
         mock_thread.return_value = MagicMock()
         resp = tc.post("/api/etl/ingest", json={"ticker": "nvda"})
 
@@ -330,7 +330,7 @@ def test_ingest_trigger(client_with_db):
 def test_sync_prices(client_with_db):
     tc, set_db = client_with_db
     set_db()
-    with patch("src.etl.pipeline.sync_prices", return_value={"NVDA": "ok"}) as mock_sync:
+    with patch("pfs.etl.pipeline.sync_prices", return_value={"NVDA": "ok"}) as mock_sync:
         resp = tc.post("/api/etl/sync-prices", json={"tickers": ["NVDA"]})
     assert resp.status_code == 200
     body = resp.json()
@@ -341,7 +341,7 @@ def test_sync_prices(client_with_db):
 def test_sync_prices_all(client_with_db):
     tc, set_db = client_with_db
     set_db()
-    with patch("src.etl.pipeline.sync_prices", return_value={}) as mock_sync:
+    with patch("pfs.etl.pipeline.sync_prices", return_value={}) as mock_sync:
         resp = tc.post("/api/etl/sync-prices", json={})
     assert resp.status_code == 200
     mock_sync.assert_called_once_with(tickers=None)
@@ -394,7 +394,7 @@ def _make_filing_db(*, company=None, filing=None, all_filings=None):
     company_chain = _make_chain_mock(first=company, all_rows=[company] if company else [])
     filing_chain = _make_chain_mock(first=filing, all_rows=all_filings or [])
 
-    from src.db.models import Company as CompanyModel, SecFiling as SecFilingModel
+    from pfs.db.models import Company as CompanyModel, SecFiling as SecFilingModel
 
     def _query(model):
         if model is CompanyModel:
@@ -485,7 +485,7 @@ def test_get_filing_content_local(filings_client):
     mock_path.exists.return_value = True
     mock_path.name = "10-K_2024_01.htm"
 
-    with patch("src.api.routers.filings._local_filing_path", return_value=mock_path):
+    with patch("pfs.api.routers.filings._local_filing_path", return_value=mock_path):
         with patch("builtins.open", return_value=io.BytesIO(html_bytes)):
             resp = tc.get("/api/filings/NVDA/1/content")
 
@@ -516,7 +516,7 @@ def _make_financials_db(*, company=None, rows=None):
     company_chain = _make_chain_mock(first=company, all_rows=[company] if company else [])
     data_chain = _make_chain_mock(all_rows=rows or [])
 
-    from src.db.models import Company as CompanyModel
+    from pfs.db.models import Company as CompanyModel
 
     def _query(model):
         if model is CompanyModel:

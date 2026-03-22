@@ -6,7 +6,7 @@ Wants=network-online.target
 [Service]
 Type=oneshot
 WorkingDirectory=/opt/pfs
-ExecStart=/root/.local/bin/uv run python -m src.etl.pipeline sync-prices
+ExecStart=/root/.local/bin/uv run python -m pfs.etl.pipeline sync-prices
 EnvironmentFile=/opt/pfs/.env
 TimeoutStartSec=600
 

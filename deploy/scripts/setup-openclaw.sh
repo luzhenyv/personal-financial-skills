@@ -24,7 +24,7 @@ ln -sfn "$PROJECT_DIR/skills/etl-coverage"    "$OC_SKILLS/etl-coverage"
 
 # 3. Install CLAUDE.md (agent persona)
 echo "Installing CLAUDE.md..."
-cp "$PROJECT_DIR/deploy/openclaw/CLAUDE.md" "$OC_WORKSPACE/CLAUDE.md"
+cp "$PROJECT_DIR/agents/openclaw/CLAUDE.md" "$OC_WORKSPACE/CLAUDE.md"
 
 # 4. Create flags directory for event-driven triggers
 mkdir -p "$PROJECT_DIR/data/artifacts/_flags"

@@ -17,7 +17,7 @@ systemctl restart pfs-api
 systemctl restart pfs-streamlit
 
 echo "=== Updating OpenClaw CLAUDE.md ==="
-cp "$PROJECT_DIR/deploy/openclaw/CLAUDE.md" /root/.openclaw/workspace/CLAUDE.md
+cp "$PROJECT_DIR/agents/openclaw/CLAUDE.md" /root/.openclaw/workspace/CLAUDE.md
 
 echo "=== Status ==="
 systemctl status pfs-api --no-pager -l | head -10

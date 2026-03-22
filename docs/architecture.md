@@ -95,16 +95,16 @@ Used to schedule and trigger ETL operations. Airflow is the planned production s
 
 ```bash
 # Ingest a single company
-uv run python -m src.etl.pipeline ingest NVDA --years 5
+uv run python -m pfs.etl.pipeline ingest NVDA --years 5
 
 # Batch ingest all S&P 500 companies
-uv run python -m src.etl.pipeline ingest-sp500
+uv run python -m pfs.etl.pipeline ingest-sp500
 
 # Refresh daily prices
-uv run python -m src.etl.pipeline sync-prices
+uv run python -m pfs.etl.pipeline sync-prices
 
 # Watch for new earnings filings
-uv run python -m src.etl.pipeline watch-earnings
+uv run python -m pfs.etl.pipeline watch-earnings
 ```
 
 **Rule: Airflow/CLI is the only way to trigger ETL.** The MCP API does not expose an ingest endpoint that the Agent can call. This prevents the Agent from accidentally re-triggering expensive ETL operations.

@@ -6,7 +6,7 @@ Wants=pfs-api.service
 [Service]
 Type=simple
 WorkingDirectory=/opt/pfs
-ExecStart=/root/.local/bin/uv run streamlit run streamlit_app/app.py \
+ExecStart=/root/.local/bin/uv run streamlit run dashboard/app.py \
     --server.port 8501 \
     --server.address 100.106.13.112 \
     --server.headless true \

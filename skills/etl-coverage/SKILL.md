@@ -67,22 +67,22 @@ For each unmapped cell the report includes:
 
 | Unmapped type | Root cause | Fix |
 |---|---|---|
-| `mapped_tags_with_data` is non-empty | Parser has the tag but mis-selected | Debug `_resolve_tag_for_year()` in `src/etl/xbrl_parser.py` — check fiscal-year/quarter matching logic |
-| `candidate_new_tags` is non-empty | New XBRL concept not in our mapping | Add the tag(s) to the appropriate `*_TAGS` dict in `src/etl/xbrl_parser.py` |
+| `mapped_tags_with_data` is non-empty | Parser has the tag but mis-selected | Debug `_resolve_tag_for_year()` in `pfs/etl/xbrl_parser.py` — check fiscal-year/quarter matching logic |
+| `candidate_new_tags` is non-empty | New XBRL concept not in our mapping | Add the tag(s) to the appropriate `*_TAGS` dict in `pfs/etl/xbrl_parser.py` |
 | Both empty, status=`no_data` | Company doesn't file this item | No fix — document as expected |
 
 ---
 
 ## Task 3 — Fix Unmapped Tags (if any)
 
-1. Open `src/etl/xbrl_parser.py`
+1. Open `pfs/etl/xbrl_parser.py`
 2. Find the relevant mapping dict (`INCOME_STATEMENT_TAGS`, `BALANCE_SHEET_TAGS`,
    or `CASH_FLOW_TAGS`)
 3. Append the new tag to the **end** of the candidate list for the target field
    (order = priority; first match wins)
 4. Re-ingest the affected ticker(s):
    ```bash
-   uv run python -m src.etl.pipeline ingest {TICKER} --years 5
+   uv run python -m pfs.etl.pipeline ingest {TICKER} --years 5
    ```
 5. Re-run coverage check to verify the fix:
    ```bash
@@ -115,9 +115,9 @@ available SEC XBRL data."**
 | File | Purpose |
 |---|---|
 | `skills/etl-coverage/scripts/check_coverage.py` | Main analysis script |
-| `src/etl/xbrl_parser.py` | XBRL tag → DB field mappings + parsing logic |
-| `src/etl/pipeline.py` | Full ingestion pipeline (ingest / ingest-batch) |
-| `src/db/models.py` | ORM models defining all financial statement columns |
+| `pfs/etl/xbrl_parser.py` | XBRL tag → DB field mappings + parsing logic |
+| `pfs/etl/pipeline.py` | Full ingestion pipeline (ingest / ingest-batch) |
+| `pfs/db/models.py` | ORM models defining all financial statement columns |
 | `data/artifacts/_etl/coverage_report.json` | Latest coverage report (machine-readable) |
 
 ## Reference docs

@@ -25,7 +25,7 @@ uv run python $THESIS report  {TICKER}                   # Regenerate markdown
 
 Verify financial data exists before creating a thesis:
 1. MCP `list_companies` / `get_company(ticker)` — confirm ticker is ingested
-2. If missing: `uv run python -m src.etl.pipeline ingest {TICKER} --years 5`
+2. If missing: `uv run python -m pfs.etl.pipeline ingest {TICKER} --years 5`
 3. Optional: seed from `data/artifacts/{TICKER}/profile/` artifacts (`--from-profile`)
 
 ## Task 1: Create
@@ -102,5 +102,5 @@ The CLI auto-regenerates `thesis_{TICKER}.md` after every subcommand. Then call 
 - Track disconfirming evidence as rigorously as confirming evidence
 - Never overwrite update or health check history — always append
 - Review theses at least quarterly
-- Domain API lives in `src/analysis/thesis_tracker.py`; CLI and Streamlit both use it
+- Domain API lives in `pfs/analysis/thesis_tracker.py`; CLI and Streamlit both use it
 ```

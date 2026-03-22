@@ -1139,7 +1139,7 @@ gantt
 |---|--------|----------------|
 | 0.1 | `git mv src/ pfs/` | Directory rename |
 | 0.2 | Find-replace `from src.` → `from pfs.` in all `.py` files | 35 Python files (~94 import lines) |
-| 0.3 | Find-replace `-m src.` → `-m pfs.` in all `.md`, `.sh` files | 13 doc/script files (~35 lines) |
+| 0.3 | Find-replace `-m pfs.` → `-m pfs.` in all `.md`, `.sh` files | 13 doc/script files (~35 lines) |
 | 0.4 | `git mv streamlit_app/ dashboard/` | Directory rename |
 | 0.5 | Update Streamlit command in docs/deploy scripts | deploy scripts, CLAUDE.md |
 | 0.6 | `mkdir -p agents/openclaw agents/copilot agents/prompts` | New directories |

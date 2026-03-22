@@ -70,7 +70,7 @@ Run these checks after completing each task for a given ticker.
 
 ## Streamlit Integration
 
-The Thesis Tracker Streamlit page (`streamlit_app/pages/2_thesis_tracker.py`) provides:
+The Thesis Tracker Streamlit page (`dashboard/pages/2_thesis_tracker.py`) provides:
 
 1. **Active Theses Overview** — Table of all active theses with latest conviction and composite score
 2. **Thesis Detail View** — Full thesis + update log + health history for a selected ticker

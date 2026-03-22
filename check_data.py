@@ -1,6 +1,6 @@
 """Quick check of NVDA data in the database."""
-from src.db.session import get_session
-from src.db.models import (
+from pfs.db.session import get_session
+from pfs.db.models import (
     Company, IncomeStatement, BalanceSheet, CashFlowStatement, FinancialMetric
 )
 

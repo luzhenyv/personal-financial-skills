@@ -5,21 +5,21 @@ from unittest.mock import MagicMock, patch
 
 
 
-@patch("src.etl.pipeline.get_session")
-@patch("src.etl.pipeline.sec_client")
-@patch("src.etl.pipeline.xbrl_parser")
-@patch("src.etl.pipeline.get_daily_prices")
-@patch("src.etl.pipeline.get_market_data")
-@patch("src.etl.pipeline.get_stock_info")
-@patch("src.etl.pipeline.get_stock_splits")
-@patch("src.etl.pipeline.validate_financials")
-@patch("src.etl.pipeline.validate_price_data")
+@patch("pfs.etl.pipeline.get_session")
+@patch("pfs.etl.pipeline.sec_client")
+@patch("pfs.etl.pipeline.xbrl_parser")
+@patch("pfs.etl.pipeline.get_daily_prices")
+@patch("pfs.etl.pipeline.get_market_data")
+@patch("pfs.etl.pipeline.get_stock_info")
+@patch("pfs.etl.pipeline.get_stock_splits")
+@patch("pfs.etl.pipeline.validate_financials")
+@patch("pfs.etl.pipeline.validate_price_data")
 def test_ingest_company_success(
     mock_val_price, mock_val_fin, mock_splits, mock_stock_info,
     mock_mkt, mock_prices, mock_xbrl, mock_sec, mock_session,
 ):
     """Full ingest completes with 'success' status when no errors."""
-    from src.etl.pipeline import ingest_company
+    from pfs.etl.pipeline import ingest_company
 
     # Setup mock DB session
     db = MagicMock()
@@ -76,11 +76,11 @@ def test_ingest_company_success(
     assert "counts" in result
 
 
-@patch("src.etl.pipeline.get_session")
-@patch("src.etl.pipeline.sec_client")
+@patch("pfs.etl.pipeline.get_session")
+@patch("pfs.etl.pipeline.sec_client")
 def test_ingest_company_bad_cik(mock_sec, mock_session):
     """Ingest fails gracefully when ticker can't be resolved."""
-    from src.etl.pipeline import ingest_company
+    from pfs.etl.pipeline import ingest_company
 
     db = MagicMock()
     etl_run = MagicMock()
@@ -96,7 +96,7 @@ def test_ingest_company_bad_cik(mock_sec, mock_session):
 
 def test_build_parser():
     """CLI parser handles all subcommands."""
-    from src.etl.pipeline import _build_parser
+    from pfs.etl.pipeline import _build_parser
 
     parser = _build_parser()
 
@@ -119,7 +119,7 @@ def test_build_parser():
 
 def test_validation_module():
     """Basic validation module tests."""
-    from src.etl.validation import validate_financials, validate_price_data
+    from pfs.etl.validation import validate_financials, validate_price_data
 
     # Within tolerance (1% < 2%)
     sec = {"revenue": 100, "net_income": 20}

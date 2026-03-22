@@ -41,7 +41,7 @@ Before starting any workflow, verify the ticker is ingested:
 
 If the ticker is **not** in the database, stop and tell the user:
 ```bash
-uv run python -m src.etl.pipeline ingest {TICKER} --years 5
+uv run python -m pfs.etl.pipeline ingest {TICKER} --years 5
 ```
 
 For company profile only, also check that `data/raw/{TICKER}/10-K_*.htm` exists (needed for SEC text extraction).
@@ -296,10 +296,10 @@ save_analysis_report(
 
 ```bash
 # Prerequisite: ensure ETL has ingested the ticker
-uv run python -m src.etl.pipeline ingest {TICKER} --years 5
+uv run python -m pfs.etl.pipeline ingest {TICKER} --years 5
 
 # Optional: extract 10-K sections (company profile)
-uv run python -m src.etl.section_extractor {TICKER}
+uv run python -m pfs.etl.section_extractor {TICKER}
 
 # --- Company Profile ---
 uv run python skills/company-profile/scripts/build_comps.py {TICKER}   # CP Task 2

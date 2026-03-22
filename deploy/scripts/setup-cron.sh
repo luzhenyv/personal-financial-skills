@@ -81,7 +81,7 @@ openclaw cron add \
     --message "Generate the weekly portfolio summary. Follow the Weekly Portfolio Summary workflow in CLAUDE.md:
 1. cd /opt/pfs
 2. Aggregate thesis scores for all tracked companies
-3. Check price performance: uv run python -c \"from src.etl.yfinance_client import get_current_price; [print(t, get_current_price(t)) for t in ['NVDA','AMD']]\"
+3. Check price performance: uv run python -c \"from pfs.etl.yfinance_client import get_current_price; [print(t, get_current_price(t)) for t in ['NVDA','AMD']]\"
 4. Review this week's artifact git log: cd /opt/pfs/data/artifacts && git log --oneline --since='7 days ago'
 5. Review upcoming catalyst timeline from thesis catalyst files
 6. Format as comprehensive weekly report for Discord"

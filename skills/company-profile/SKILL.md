@@ -38,7 +38,7 @@ User asks for company overview, profile, tearsheet, or "tell me about {ticker}".
 
 If the ticker is **not** in the database, instruct the user to run ETL first:
 ```bash
-uv run python -m src.etl.pipeline ingest {TICKER} --years 5
+uv run python -m pfs.etl.pipeline ingest {TICKER} --years 5
 ```
 
 ## Task Overview
@@ -121,7 +121,7 @@ After the script runs, call MCP `save_analysis_report(ticker, 'company_profile',
 
 ```bash
 # Prerequisite: ensure ETL has ingested the ticker
-uv run python -m src.etl.pipeline ingest {TICKER} --years 5
+uv run python -m pfs.etl.pipeline ingest {TICKER} --years 5
 
 # Skill workflow
 # → Task 1: Create 6 JSON files via AI using MCP data

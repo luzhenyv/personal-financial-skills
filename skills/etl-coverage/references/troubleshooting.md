@@ -10,13 +10,13 @@ Common issues encountered during ETL coverage analysis and how to fix them.
 `candidate_new_tags` populated.
 
 **Fix**:
-1. Open `src/etl/xbrl_parser.py`
+1. Open `pfs/etl/xbrl_parser.py`
 2. Find the correct mapping dict:
    - Income fields → `INCOME_STATEMENT_TAGS`
    - Balance fields → `BALANCE_SHEET_TAGS`
    - Cash flow fields → `CASH_FLOW_TAGS`
 3. Add the new tag to the **end** of the list for the target field
-4. Re-ingest: `uv run python -m src.etl.pipeline ingest {TICKER} --years 5`
+4. Re-ingest: `uv run python -m pfs.etl.pipeline ingest {TICKER} --years 5`
 5. Re-check: `uv run python skills/etl-coverage/scripts/check_coverage.py --ticker {TICKER}`
 
 **Example**:
@@ -52,8 +52,8 @@ Common reasons:
 
 **Fix**: Debug by running in Python:
 ```python
-from src.etl.xbrl_parser import _extract_fact_values
-from src.etl.sec_client import get_company_facts_cached, ticker_to_cik
+from pfs.etl.xbrl_parser import _extract_fact_values
+from pfs.etl.sec_client import get_company_facts_cached, ticker_to_cik
 
 cik = ticker_to_cik("AAPL")
 facts = get_company_facts_cached("AAPL", cik)
@@ -108,7 +108,7 @@ returns no data.
 
 After editing `xbrl_parser.py`, you must re-ingest:
 ```bash
-uv run python -m src.etl.pipeline ingest {TICKER} --years 5
+uv run python -m pfs.etl.pipeline ingest {TICKER} --years 5
 ```
 
 The pipeline **upserts** (inserts or updates) so existing rows will be

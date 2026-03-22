@@ -51,7 +51,7 @@ echo "  sudo -u postgres psql -c \"ALTER USER pfs WITH PASSWORD 'your-password';
 echo ""
 
 # Apply schema
-sudo -u postgres psql -d personal_finance -f "$PROJECT_DIR/src/db/schema.sql" 2>/dev/null || true
+sudo -u postgres psql -d personal_finance -f "$PROJECT_DIR/pfs/db/schema.sql" 2>/dev/null || true
 systemctl restart postgresql
 
 # ── 4. Python environment ──
@@ -78,7 +78,7 @@ ARTIFACTS_DIR="$PROJECT_DIR/data/artifacts"
 mkdir -p "$ARTIFACTS_DIR"
 if [[ ! -d "$ARTIFACTS_DIR/.git" ]]; then
     cd "$ARTIFACTS_DIR"
-    cp "$PROJECT_DIR/deploy/openclaw/artifact-gitignore" .gitignore
+    cp "$PROJECT_DIR/agents/openclaw/artifact-gitignore" .gitignore
     git init
     git add -A
     git commit -m "Initial artifact snapshot" --allow-empty
@@ -129,7 +129,7 @@ echo "  1. Edit /opt/pfs/.env with real credentials"
 echo "  2. Set Postgres password: sudo -u postgres psql -c \"ALTER USER pfs WITH PASSWORD 'xxx';\""
 echo "  3. Start services: systemctl enable --now pfs-api pfs-streamlit"
 echo "  4. Start timers: systemctl start pfs-price-sync.timer pfs-artifact-commit.timer pfs-filing-check.timer"
-echo "  5. Run initial ETL: cd /opt/pfs && uv run python -m src.etl.pipeline ingest NVDA --years 5"
+echo "  5. Run initial ETL: cd /opt/pfs && uv run python -m pfs.etl.pipeline ingest NVDA --years 5"
 echo "  6. Set up OpenClaw cron: bash /opt/pfs/deploy/scripts/setup-cron.sh"
 echo "  7. Verify Streamlit: curl http://100.106.13.112:8501"
 echo ""

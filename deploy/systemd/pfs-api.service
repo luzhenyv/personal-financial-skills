@@ -6,7 +6,7 @@ Requires=postgresql.service
 [Service]
 Type=simple
 WorkingDirectory=/opt/pfs
-ExecStart=/root/.local/bin/uv run uvicorn src.api.app:app --host 127.0.0.1 --port 8000
+ExecStart=/root/.local/bin/uv run uvicorn pfs.api.app:app --host 127.0.0.1 --port 8000
 Restart=on-failure
 RestartSec=5
 EnvironmentFile=/opt/pfs/.env

@@ -3,7 +3,7 @@
 import pytest
 from unittest.mock import patch, MagicMock
 
-from src.etl.xbrl_parser import (
+from pfs.etl.xbrl_parser import (
     parse_income_statement,
     parse_balance_sheet,
     parse_cash_flow,
@@ -281,7 +281,7 @@ def test_compute_metrics_with_market_data():
 
 def test_parse_revenue_segments():
     """Revenue segment parsing returns a list (possibly empty for basic facts)."""
-    from src.etl.xbrl_parser import parse_revenue_segments
+    from pfs.etl.xbrl_parser import parse_revenue_segments
 
     segments = parse_revenue_segments(SAMPLE_FACTS, 2023)
     assert isinstance(segments, list)

@@ -38,8 +38,8 @@ if raw_dir.exists():
 
 # Check DB for filings we haven't downloaded yet
 try:
-    from src.db.session import SessionLocal
-    from src.db.models import SecFiling
+    from pfs.db.session import SessionLocal
+    from pfs.db.models import SecFiling
     db = SessionLocal()
     filings = db.query(SecFiling).filter(SecFiling.ticker == ticker).all()
     new = []

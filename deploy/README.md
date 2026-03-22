@@ -40,8 +40,8 @@
 ├── .env                               ← secrets (not in git)
 ├── .venv/                             ← uv-managed virtualenv
 ├── pyproject.toml
-├── src/                               ← source code
-├── streamlit_app/                     ← Streamlit frontend
+├── pfs/                               ← source code
+├── dashboard/                     ← Streamlit frontend
 ├── skills/                            ← skill definitions (symlinked into OpenClaw)
 ├── scripts/
 └── data/
@@ -90,7 +90,7 @@
 
 ```
 MECHANICAL (systemd timers — no LLM, deterministic)
-├── pfs-price-sync.timer      M-F 17:30 ET   uv run python -m src.etl.pipeline sync-prices
+├── pfs-price-sync.timer      M-F 17:30 ET   uv run python -m pfs.etl.pipeline sync-prices
 ├── pfs-artifact-commit.timer  Daily 23:55    git -C data/artifacts add -A && commit
 └── pfs-etl-filing-check.timer Daily 06:00 ET check for new SEC filings (script only)
 
@@ -145,7 +145,7 @@ sudo -u postgres createdb -O pfs personal_finance
 sudo -u postgres psql -c "ALTER USER pfs WITH PASSWORD '<your-password>';"
 
 # Apply schema
-sudo -u postgres psql -d personal_finance -f /opt/pfs/src/db/schema.sql
+sudo -u postgres psql -d personal_finance -f /opt/pfs/pfs/db/schema.sql
 
 # Apply low-memory tuning
 sudo cp /opt/pfs/deploy/postgres/pfs-tuning.conf /etc/postgresql/16/main/conf.d/

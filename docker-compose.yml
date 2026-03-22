@@ -12,7 +12,7 @@ services:
       - "5432:5432"
     volumes:
       - pgdata:/var/lib/postgresql/data
-      - ./src/db/schema.sql:/docker-entrypoint-initdb.d/01-schema.sql
+      - ./pfs/db/schema.sql:/docker-entrypoint-initdb.d/01-schema.sql
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U pfs -d personal_finance"]
       interval: 5s
@@ -34,7 +34,7 @@ services:
       context: .
       dockerfile: Dockerfile
     container_name: pfs-api
-    command: uv run uvicorn src.api.app:app --host 0.0.0.0 --port 8000 --reload
+    command: uv run uvicorn pfs.api.app:app --host 0.0.0.0 --port 8000 --reload
     ports:
       - "8000:8000"
     environment:
@@ -54,7 +54,7 @@ services:
       context: .
       dockerfile: Dockerfile
     container_name: pfs-streamlit
-    command: uv run streamlit run streamlit_app/app.py --server.port 8501 --server.address 0.0.0.0
+    command: uv run streamlit run dashboard/app.py --server.port 8501 --server.address 0.0.0.0
     ports:
       - "8501:8501"
     environment:

@@ -36,16 +36,16 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 # ── Project imports ────────────────────────────────────────────────────────────
-from src.config import settings
-from src.db.models import (
+from pfs.config import settings
+from pfs.db.models import (
     BalanceSheet,
     CashFlowStatement,
     Company,
     IncomeStatement,
 )
-from src.db.session import get_session
-from src.etl import sec_client
-from src.etl.xbrl_parser import (
+from pfs.db.session import get_session
+from pfs.etl import sec_client
+from pfs.etl.xbrl_parser import (
     BALANCE_SHEET_TAGS,
     CASH_FLOW_TAGS,
     INCOME_STATEMENT_TAGS,
