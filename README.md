@@ -6,21 +6,19 @@ A one-person AI-powered equity research platform built around three decoupled pl
 
 ## Architecture
 
-```
-┌─────────────────────────────────────────────────────────────────┐
-│  PLANE 1 · DATA PLANE  (Mini Bloomberg)                         │
-│  ETL → PostgreSQL + raw/  ← single source of truth for facts   │
-└─────────────────────────────────────────────────────────────────┘
-          ↓  MCP / REST API  (read-only contract)
-┌─────────────────────────────────────────────────────────────────┐
-│  PLANE 2 · INTELLIGENCE PLANE  (Agent + Skills)                 │
-│  Reads MCP → generates analysis artifacts (profile, thesis…)   │
-└─────────────────────────────────────────────────────────────────┘
-          ↓  reads artifacts + API
-┌─────────────────────────────────────────────────────────────────┐
-│  PLANE 3 · PRESENTATION PLANE  (Streamlit)                      │
-│  Renders artifacts and charts — never writes, never triggers ETL│
-└─────────────────────────────────────────────────────────────────┘
+```mermaid
+graph TD
+    A["📊 PLANE 1 · DATA PLANE<br/>(Mini Bloomberg)<br/><br/>ETL Pipeline → PostgreSQL + raw/<br/>Single Source of Truth"]
+    B["🧠 PLANE 2 · INTELLIGENCE PLANE<br/>(Agent + Skills)<br/><br/>Reads MCP → Generates Artifacts<br/>Profile, Thesis, ETL Coverage"]
+    C["📈 PLANE 3 · PRESENTATION PLANE<br/>(Streamlit)<br/><br/>Renders Artifacts & Charts<br/>Never Writes, Never Triggers ETL"]
+    
+    A -->|MCP + REST API<br/>Read-Only Contract| B
+    B -->|Writes to<br/>data/artifacts/| B
+    B -->|Reads Artifacts + API| C
+    
+    style A fill:#e1f5ff
+    style B fill:#fff3e0
+    style C fill:#f3e5f5
 ```
 
 **Three hard boundaries:**
@@ -50,21 +48,39 @@ For full design details see [`docs/architecture.md`](docs/architecture.md) and [
 
 ## Data Flow
 
-```
-SEC EDGAR ──┐
-yfinance  ──┼──► ETL Pipeline ──► PostgreSQL (market_data, fundamentals,
-Alpha Vantage┘    data/raw/                    metrics, etl_audit)
-                                                    │
-                                      FastAPI :8000 + MCP :8001  ◄── read-only
-                                                    │
-                                             Agent + Skills
-                                                    │
-                                         data/artifacts/{ticker}/
-                                         ├── profile/   (.md + .json)
-                                         ├── thesis/    (versioned .json)
-                                         └── ...
-                                                    │
-                                           Streamlit Dashboard
+```mermaid
+graph LR
+    SEC["SEC EDGAR"]
+    YF["yfinance"]
+    AV["Alpha Vantage"]
+    
+    SEC --> ETL["ETL Pipeline"]
+    YF --> ETL
+    AV --> ETL
+    
+    ETL --> PG["PostgreSQL<br/>market_data<br/>fundamentals<br/>metrics<br/>etl_audit"]
+    ETL --> RAW["data/raw/<br/>SEC Filings<br/>Local Cache"]
+    
+    PG -->|FastAPI :8000| API["REST API"]
+    PG -->|MCP :8001| MCP["MCP Server"]
+    
+    API --> SKILLS["Agent + Skills"]
+    MCP --> SKILLS
+    
+    SKILLS -->|Writes| ARTIFACTS["data/artifacts/<br/>profile/<br/>thesis/<br/>..."]
+    
+    ARTIFACTS --> STREAMLIT["Streamlit Dashboard<br/>:8501"]
+    
+    style SEC fill:#ffe0b2
+    style YF fill:#ffe0b2
+    style AV fill:#ffe0b2
+    style ETL fill:#fff9c4
+    style PG fill:#c8e6c9
+    style API fill:#bbdefb
+    style MCP fill:#bbdefb
+    style SKILLS fill:#f8bbd0
+    style ARTIFACTS fill:#e1bee7
+    style STREAMLIT fill:#c7ceea
 ```
 
 **Data source priority**: `MCP (PostgreSQL) > local SEC files > Alpha Vantage > yfinance > web search`
