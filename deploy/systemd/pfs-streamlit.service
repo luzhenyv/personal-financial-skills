@@ -13,7 +13,7 @@ ExecStart=/root/.local/bin/uv run streamlit run dashboard/app.py \
     --browser.gatherUsageStats false
 Restart=on-failure
 RestartSec=5
-Environment=API_BASE_URL=http://127.0.0.1:8000
+Environment=API_BASE_URL=http://100.124.144.100:8000
 
 # Hardening
 NoNewPrivileges=true

@@ -423,8 +423,14 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     if args.http:
+        from mcp.server.fastmcp.server import TransportSecuritySettings
         mcp.settings.host = args.host
         mcp.settings.port = args.port
+        # Disable DNS-rebinding protection — the MCP server is only reachable
+        # over the private Tailscale WireGuard tunnel (not exposed to internet).
+        mcp.settings.transport_security = TransportSecuritySettings(
+            enable_dns_rebinding_protection=False,
+        )
         mcp.run(transport="streamable-http")
     else:
         mcp.run(transport="stdio")
