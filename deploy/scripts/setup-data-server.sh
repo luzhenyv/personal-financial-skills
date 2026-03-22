@@ -1,20 +1,22 @@
 #!/usr/bin/env bash
-# setup-data-server.sh — One-shot setup for Data Server (Mac Mini)
-# Runs: PostgreSQL (Docker), FastAPI, MCP HTTP server, Prefect, Streamlit
+# setup-data-server.sh — One-shot setup for Data Server (Mac local)
+# Runs: PostgreSQL + pgAdmin (Docker), FastAPI :8000, MCP HTTP :8001
 # NO OpenClaw, NO task dispatcher — those run on Agent Server
 #
 # Prerequisites:
 #   - Docker Desktop installed and running
 #   - Tailscale connected
+#   - deploy/docker/.env.data-server filled in (copy from .env.data-server.example)
 #
-# Usage: bash /opt/pfs/deploy/scripts/setup-data-server.sh
+# Usage: bash deploy/scripts/setup-data-server.sh
 set -euo pipefail
 
 echo "=========================================="
 echo "  Mini Bloomberg — Data Server Setup"
 echo "=========================================="
 
-PROJECT_DIR="/opt/pfs"
+# Resolve project root regardless of where the script is called from
+PROJECT_DIR="$( cd "$(dirname "$0")/../.." && pwd )"
 cd "$PROJECT_DIR"
 
 # ── 1. Check Docker ──
@@ -48,37 +50,46 @@ uv sync
 # ── 4. Environment file ──
 echo ""
 echo "=== [4/8] Environment configuration ==="
+if [[ ! -f "$PROJECT_DIR/deploy/docker/.env.data-server" ]]; then
+    cp "$PROJECT_DIR/deploy/docker/.env.data-server.example" \
+       "$PROJECT_DIR/deploy/docker/.env.data-server"
+    echo "Created deploy/docker/.env.data-server — EDIT IT with real values:"
+    echo "  nano $PROJECT_DIR/deploy/docker/.env.data-server"
+else
+    echo "deploy/docker/.env.data-server already exists — skipping"
+fi
+
+# Also ensure root .env exists for FastAPI / MCP
 if [[ ! -f "$PROJECT_DIR/.env" ]]; then
     cat > "$PROJECT_DIR/.env" <<'ENVEOF'
-# Data Server .env — edit with real values
-# PostgreSQL (Docker)
-POSTGRES_USER=pfs
-PFS_DB_PASSWORD=changeme
+# Data Server .env — application config
+DATABASE_URL=postgresql://pfs:CHANGE_ME@127.0.0.1:5432/personal_finance
 POSTGRES_DB=personal_finance
-DATABASE_URL=postgresql://pfs:changeme@127.0.0.1:5432/personal_finance
-# Tailscale bind address (for remote access)
-TAILSCALE_IP=100.124.x.x
-# pgAdmin
-PGADMIN_EMAIL=admin@local.dev
-PGADMIN_PASSWORD=admin
-# API keys
-ALPHA_VANTAGE_API_KEY=
-SEC_USER_AGENT=YourName your@email.com
+POSTGRES_USER=pfs
+POSTGRES_PASSWORD=CHANGE_ME
+SEC_USER_AGENT=PersonalFinanceApp your@email.com
+ALPHA_VANTAGE_KEY=
 ENVEOF
-    echo "Created .env — EDIT IT with real values:"
-    echo "  nano $PROJECT_DIR/.env"
+    echo "Created .env — EDIT IT with real credentials."
 else
     echo ".env already exists — skipping"
 fi
 
-# ── 5. Start PostgreSQL (Docker) ──
+# ── 5. Start PostgreSQL + pgAdmin (Docker) ──
 echo ""
-echo "=== [5/8] Starting PostgreSQL ==="
-docker compose -f deploy/docker/docker-compose.data.yml --env-file .env up -d
-echo "Waiting for PostgreSQL to be ready..."
-sleep 5
-docker compose -f deploy/docker/docker-compose.data.yml exec postgres pg_isready -U pfs -d personal_finance || {
-    echo "PostgreSQL not ready — check logs: docker compose -f deploy/docker/docker-compose.data.yml logs postgres"
+echo "=== [5/8] Starting PostgreSQL + pgAdmin ==="
+docker compose -f deploy/docker/docker-compose.data.yml \
+    --env-file deploy/docker/.env.data-server up -d
+echo "Waiting for PostgreSQL to be healthy..."
+for i in $(seq 1 12); do
+    docker compose -f deploy/docker/docker-compose.data.yml exec -T postgres \
+        pg_isready -U pfs -d personal_finance &>/dev/null && break
+    sleep 5
+done
+docker compose -f deploy/docker/docker-compose.data.yml exec -T postgres \
+    pg_isready -U pfs -d personal_finance || {
+    echo "PostgreSQL not ready — check logs:"
+    echo "  docker compose -f deploy/docker/docker-compose.data.yml logs postgres"
     exit 1
 }
 echo "PostgreSQL OK"
@@ -100,35 +111,33 @@ echo ""
 echo "=== [7/8] Seeding task registry ==="
 uv run python scripts/seed_tasks.py || echo "Seed script failed (may need DB connection)"
 
-# ── 8. Install systemd services (if Linux) / launchd (if macOS) ──
+# ── 8. Start services (macOS: background processes) ──
 echo ""
-echo "=== [8/8] Service configuration ==="
+echo "=== [8/8] Starting services ==="
 if [[ "$(uname)" == "Darwin" ]]; then
-    echo "macOS detected — use launchd or run manually:"
-    echo "  # FastAPI"
-    echo "  uv run uvicorn pfs.api.app:app --host 0.0.0.0 --port 8000"
-    echo ""
-    echo "  # MCP HTTP server"
-    echo "  uv run python -m pfs.mcp.server  # (configure HTTP transport on :8001)"
-    echo ""
-    echo "  # Streamlit"
-    echo "  uv run streamlit run dashboard/app.py --server.address 0.0.0.0"
+    # Kill any existing instances
+    pkill -f 'uvicorn pfs.api' 2>/dev/null || true
+    pkill -f 'pfs.mcp.server' 2>/dev/null || true
+    sleep 1
+
+    # FastAPI
+    nohup uv run uvicorn pfs.api.app:app --host 0.0.0.0 --port 8000 \
+        --log-level info > /tmp/pfs-api.log 2>&1 &
+    echo "FastAPI started (PID $!) — logs: /tmp/pfs-api.log"
+
+    # MCP HTTP server (Tailscale-accessible, DNS-rebinding protection disabled)
+    nohup uv run python -m pfs.mcp.server --http --port 8001 --host 0.0.0.0 \
+        > /tmp/pfs-mcp.log 2>&1 &
+    echo "MCP HTTP started (PID $!) — logs: /tmp/pfs-mcp.log"
+
+    sleep 3
+    echo "Health check:"
+    curl -s http://localhost:8000/health || echo "  WARNING: FastAPI not responding yet"
 else
-    # Linux (systemd)
-    cp deploy/systemd/pfs-api.service /etc/systemd/system/
-    cp deploy/systemd/pfs-streamlit.service /etc/systemd/system/
-    cp deploy/systemd/pfs-price-sync.service /etc/systemd/system/
-    cp deploy/systemd/pfs-price-sync.timer /etc/systemd/system/
-    cp deploy/systemd/pfs-filing-check.service /etc/systemd/system/
-    cp deploy/systemd/pfs-filing-check.timer /etc/systemd/system/
-
-    systemctl daemon-reload
-    systemctl enable pfs-price-sync.timer
-    systemctl enable pfs-filing-check.timer
-
-    echo "Services installed. Start them:"
-    echo "  systemctl enable --now pfs-api pfs-streamlit"
-    echo "  systemctl start pfs-price-sync.timer pfs-filing-check.timer"
+    echo "Linux detected — no systemd services defined for Data Server."
+    echo "Run manually:"
+    echo "  nohup uv run uvicorn pfs.api.app:app --host 0.0.0.0 --port 8000 > /tmp/pfs-api.log 2>&1 &"
+    echo "  nohup uv run python -m pfs.mcp.server --http --port 8001 --host 0.0.0.0 > /tmp/pfs-mcp.log 2>&1 &"
 fi
 
 echo ""
@@ -136,13 +145,18 @@ echo "=========================================="
 echo "  Data Server Setup Complete!"
 echo "=========================================="
 echo ""
-echo "Remaining manual steps:"
-echo "  1. Edit /opt/pfs/.env with real credentials"
-echo "  2. Start FastAPI: uv run uvicorn pfs.api.app:app --host 0.0.0.0 --port 8000"
-echo "  3. Start MCP HTTP: uv run python -m pfs.mcp.server (bind :8001)"
-echo "  4. Start Streamlit: uv run streamlit run dashboard/app.py"
-echo "  5. Run initial ETL: uv run python -m pfs.etl.pipeline ingest NVDA --years 5"
-echo "  6. Seed tasks: uv run python scripts/seed_tasks.py"
-echo "  7. Test API: curl http://localhost:8000/health"
-echo "  8. Test task schedule: curl http://localhost:8000/api/tasks/schedule"
+echo "Services running:"
+echo "  PostgreSQL :5432  (Docker, data in named volume 'personal-financial-skills_pgdata')"
+echo "  pgAdmin    :5050  (Docker)"
+echo "  FastAPI    :8000  (logs: /tmp/pfs-api.log)"
+echo "  MCP HTTP   :8001  (logs: /tmp/pfs-mcp.log)"
+echo ""
+echo "Verify:"
+echo "  curl http://localhost:8000/health"
+echo "  curl http://localhost:8000/api/tasks/schedule"
+echo ""
+echo "Next steps:"
+echo "  1. Edit deploy/docker/.env.data-server and .env with real credentials"
+echo "  2. Edit Tailscale IP in deploy/docker/.env.data-server (TAILSCALE_IP=...)"
+echo "  3. Run initial ETL: uv run python -m pfs.etl.pipeline ingest NVDA --years 5"
 echo ""

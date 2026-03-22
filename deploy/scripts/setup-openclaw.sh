@@ -9,13 +9,7 @@ OC_SKILLS="$OC_WORKSPACE/skills"
 
 echo "=== Setting up OpenClaw workspace for Mini Bloomberg ==="
 
-# 1. Remove old test skills (user confirmed these can be deleted)
-echo "Removing old test skills..."
-rm -rf "$OC_SKILLS/daily-schedule-parser"
-rm -rf "$OC_SKILLS/english-expression-helper"
-rm -rf "$OC_SKILLS/investment-assistant"
-
-# 2. Symlink project skills into OpenClaw workspace
+# 1. Symlink project skills into OpenClaw workspace
 echo "Symlinking project skills..."
 mkdir -p "$OC_SKILLS"
 ln -sfn "$PROJECT_DIR/skills/company-profile" "$OC_SKILLS/company-profile"

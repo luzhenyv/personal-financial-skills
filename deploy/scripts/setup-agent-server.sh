@@ -44,19 +44,18 @@ echo ""
 echo "=== [4/7] Environment configuration ==="
 if [[ ! -f "$PROJECT_DIR/.env" ]]; then
     cat > "$PROJECT_DIR/.env" <<'ENVEOF'
-# Agent Server .env — edit with real values
-# Data Server API (via Tailscale)
-PFS_API_URL=http://100.124.x.x:8000
-# MCP HTTP endpoint (via Tailscale)
-PFS_MCP_URL=http://100.124.x.x:8001/mcp
-# Dispatcher settings
+# Agent Server .env
+# Data Server Tailscale IP: 100.124.144.100
+PFS_API_URL=http://100.124.144.100:8000
+PFS_MCP_URL=http://100.124.144.100:8001/mcp
 PFS_POLL_INTERVAL=60
 PFS_TASK_TIMEOUT=600
 PFS_PROJECT_DIR=/opt/pfs
-# GitHub token for artifact push (generate a fine-grained PAT)
 GITHUB_TOKEN=
+SEC_USER_AGENT=PersonalFinanceApp your@email.com
+ALPHA_VANTAGE_KEY=
 ENVEOF
-    echo "Created .env — EDIT IT with real values:"
+    echo "Created .env — update GITHUB_TOKEN and API keys if needed:"
     echo "  nano $PROJECT_DIR/.env"
 else
     echo ".env already exists — skipping"
@@ -69,11 +68,12 @@ ARTIFACTS_DIR="$PROJECT_DIR/data/artifacts"
 mkdir -p "$ARTIFACTS_DIR"
 if [[ ! -d "$ARTIFACTS_DIR/.git" ]]; then
     cd "$ARTIFACTS_DIR"
-    cp "$PROJECT_DIR/agents/openclaw/artifact-gitignore" .gitignore
+    cp "$PROJECT_DIR/agents/openclaw/artifact-gitignore" .gitignore 2>/dev/null || true
     git init
     git checkout -b main
-    git add -A
-    git commit -m "Initial artifact snapshot" --allow-empty
+    git -c user.email="pfs@local" -c user.name="PFS Agent" add -A
+    git -c user.email="pfs@local" -c user.name="PFS Agent" \
+        commit --allow-empty -m "Initial artifact snapshot"
     echo "Artifact repo initialized at $ARTIFACTS_DIR"
     echo ""
     echo "Add GitHub remote:"
@@ -88,19 +88,13 @@ echo ""
 echo "=== [6/7] Installing systemd services ==="
 chmod +x deploy/scripts/*.sh
 
-# Task dispatcher
+cp deploy/systemd/pfs-streamlit.service /etc/systemd/system/
 cp deploy/systemd/pfs-task-dispatcher.service /etc/systemd/system/
 
-# Artifact commit timer (daily push)
-cp deploy/systemd/pfs-artifact-commit.service /etc/systemd/system/
-cp deploy/systemd/pfs-artifact-commit.timer /etc/systemd/system/
-
 systemctl daemon-reload
-systemctl enable pfs-artifact-commit.timer
+systemctl enable pfs-streamlit pfs-task-dispatcher
 
-echo "Services installed. Start after editing .env:"
-echo "  systemctl enable --now pfs-task-dispatcher"
-echo "  systemctl start pfs-artifact-commit.timer"
+echo "Services installed."
 
 # ── 7. OpenClaw workspace ──
 echo ""
@@ -112,11 +106,19 @@ echo "=========================================="
 echo "  Agent Server Setup Complete!"
 echo "=========================================="
 echo ""
-echo "Remaining manual steps:"
-echo "  1. Edit /opt/pfs/.env with Data Server Tailscale IP + GitHub token"
-echo "  2. Add artifact remote: git -C $ARTIFACTS_DIR remote add origin https://github.com/<user>/pfs-artifacts.git"
-echo "  3. Verify API access: curl \$PFS_API_URL/health"
-echo "  4. Start dispatcher: systemctl enable --now pfs-task-dispatcher"
-echo "  5. Start artifact timer: systemctl start pfs-artifact-commit.timer"
+echo "Starting services..."
+systemctl start pfs-streamlit pfs-task-dispatcher
+sleep 3
+systemctl is-active pfs-streamlit pfs-task-dispatcher || true
+echo ""
+echo "Streamlit:        http://100.106.13.112:8501"
+echo "API reachable at: http://100.124.144.100:8000"
+echo ""
+echo "Verify:"
+echo "  systemctl status pfs-streamlit pfs-task-dispatcher"
+echo "  curl http://100.124.144.100:8000/health"
+echo ""
+echo "Optional — add artifact GitHub remote:"
+echo "  git -C $ARTIFACTS_DIR remote add origin https://github.com/<user>/pfs-artifacts.git"
 echo "  6. Set up OpenClaw cron: bash /opt/pfs/deploy/scripts/setup-cron.sh"
 echo ""
