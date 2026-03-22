@@ -37,7 +37,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[3]))
 
 def _regenerate_report(ticker: str) -> Path:
     """Regenerate the markdown report and return its path."""
-    from pfs.analysis.thesis_tracker import generate_thesis_markdown
+    from skills._lib.thesis_io import generate_thesis_markdown
 
     md = generate_thesis_markdown(ticker)
     md_path = Path(f"data/artifacts/{ticker}/thesis/thesis_{ticker}.md")
@@ -196,7 +196,7 @@ def cmd_create(args: argparse.Namespace) -> None:
         print("Error: provide --thesis, --interactive, --from-profile, or --from-json")
         sys.exit(1)
 
-    from pfs.analysis.thesis_tracker import create_thesis
+    from skills._lib.thesis_io import create_thesis
 
     create_thesis(ticker, **data)
     md_path = _regenerate_report(ticker)
@@ -210,7 +210,7 @@ def cmd_create(args: argparse.Namespace) -> None:
 
 
 def _interactive_update(ticker: str) -> dict:
-    from pfs.analysis.thesis_tracker import get_active_thesis
+    from skills._lib.thesis_io import get_active_thesis
 
     thesis = get_active_thesis(ticker)
     if thesis is None:
@@ -271,7 +271,7 @@ def cmd_update(args: argparse.Namespace) -> None:
         print("Error: provide --event or --interactive")
         sys.exit(1)
 
-    from pfs.analysis.thesis_tracker import add_thesis_update
+    from skills._lib.thesis_io import add_thesis_update
 
     result = add_thesis_update(ticker, **data)
     md_path = _regenerate_report(ticker)
@@ -286,9 +286,9 @@ def cmd_update(args: argparse.Namespace) -> None:
 
 def _compute_objective_score(ticker: str, assumptions: list[dict]) -> tuple[float, list[dict]]:
     """Compute objective health score from financial data."""
-    from pfs.analysis.company_profile import get_profile_data
+    from skills._lib.api_client import get_profile
 
-    profile = get_profile_data(ticker, years=3)
+    profile = get_profile(ticker, years=3)
     if "error" in profile:
         return 50.0, []
 
@@ -356,7 +356,7 @@ def _score_from_thresholds(value: float, thresholds: dict) -> float:
 
 def _run_health_check(ticker: str) -> dict:
     """Run a full health check for *ticker* and return the result dict."""
-    from pfs.analysis.thesis_tracker import get_active_thesis, add_health_check
+    from skills._lib.thesis_io import get_active_thesis, add_health_check
 
     thesis = get_active_thesis(ticker)
     if thesis is None:
@@ -430,7 +430,7 @@ def _run_health_check(ticker: str) -> dict:
 
 def cmd_check(args: argparse.Namespace) -> None:
     if args.all:
-        from pfs.analysis.thesis_tracker import get_all_active_theses
+        from skills._lib.thesis_io import get_all_active_theses
 
         theses = get_all_active_theses()
         if not theses:
@@ -464,7 +464,7 @@ def cmd_check(args: argparse.Namespace) -> None:
 def cmd_catalyst(args: argparse.Namespace) -> None:
     ticker = args.ticker.upper()
 
-    from pfs.analysis.thesis_tracker import (
+    from skills._lib.thesis_io import (
         get_catalysts, add_catalyst, update_catalyst,
     )
 
@@ -529,7 +529,7 @@ def cmd_catalyst(args: argparse.Namespace) -> None:
 def cmd_report(args: argparse.Namespace) -> None:
     ticker = args.ticker.upper()
 
-    from pfs.analysis.thesis_tracker import generate_thesis_markdown
+    from skills._lib.thesis_io import generate_thesis_markdown
 
     md = generate_thesis_markdown(ticker)
     if not md:

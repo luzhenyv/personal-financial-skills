@@ -34,7 +34,7 @@ def load_thesis_page_data(ticker: str) -> ThesisPageData | None:
     Returns:
         A :class:`ThesisPageData` instance, or ``None`` if not found.
     """
-    from pfs.analysis.thesis_tracker import get_thesis_detail
+    from skills._lib.thesis_io import get_thesis_detail
 
     detail = get_thesis_detail(ticker)
     if detail is None:

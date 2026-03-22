@@ -2,11 +2,15 @@
 
 from __future__ import annotations
 
+import os
 from pathlib import Path
 
+import httpx
 import streamlit as st
 
 from dashboard.components.loaders.company import CompanyPageData
+
+API_BASE_URL = os.environ.get("API_BASE_URL", "http://localhost:8000")
 
 
 def render_report_tab(d: CompanyPageData, rev_growth: float, wacc: float) -> None:
@@ -17,8 +21,6 @@ def render_report_tab(d: CompanyPageData, rev_growth: float, wacc: float) -> Non
         rev_growth: Revenue growth rate used for report generation.
         wacc: WACC used for report generation.
     """
-    from pfs.analysis.company_profile import generate_tearsheet
-
     ticker = d.company["ticker"]
 
     st.markdown('<div class="section-header">📝 Company Profile Report</div>', unsafe_allow_html=True)
@@ -32,14 +34,18 @@ def render_report_tab(d: CompanyPageData, rev_growth: float, wacc: float) -> Non
     if generate_btn:
         with st.spinner(f"Generating investment report for {ticker}..."):
             try:
-                from pfs.analysis.investment_report import generate_investment_report
-
-                new_md = generate_investment_report(
-                    ticker,
-                    revenue_growth=rev_growth,
-                    wacc=wacc,
-                    save=True,
+                params: dict = {}
+                if rev_growth is not None:
+                    params["revenue_growth"] = rev_growth
+                if wacc is not None:
+                    params["wacc"] = wacc
+                resp = httpx.post(
+                    f"{API_BASE_URL}/api/analysis/investment-report/{ticker}",
+                    params=params,
+                    timeout=120,
                 )
+                resp.raise_for_status()
+                new_md = resp.json()["markdown"]
                 st.session_state[f"report_{ticker}"] = new_md
                 st.success(f"Report generated! ({len(new_md):,} characters)")
             except Exception as e:
@@ -72,7 +78,12 @@ def render_report_tab(d: CompanyPageData, rev_growth: float, wacc: float) -> Non
             )
         with col2:
             try:
-                tearsheet_md = generate_tearsheet(ticker)
+                resp = httpx.get(
+                    f"{API_BASE_URL}/api/analysis/tearsheet/{ticker}",
+                    timeout=60,
+                )
+                resp.raise_for_status()
+                tearsheet_md = resp.json()["markdown"]
                 st.download_button(
                     "⬇️ Tearsheet (.md)",
                     data=tearsheet_md,

@@ -47,7 +47,7 @@ with st.sidebar:
 
     @st.cache_data(ttl=30)
     def _load_all_theses():
-        from pfs.analysis.thesis_tracker import get_all_active_theses
+        from skills._lib.thesis_io import get_all_active_theses
         return get_all_active_theses()
 
     all_theses = _load_all_theses()
@@ -163,7 +163,7 @@ st.markdown("---")
 col1, col2 = st.columns(2)
 
 with col1:
-    from pfs.analysis.thesis_tracker import generate_thesis_markdown
+    from skills._lib.thesis_io import generate_thesis_markdown
     md_content = generate_thesis_markdown(ticker)
     if md_content:
         st.download_button(

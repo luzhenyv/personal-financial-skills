@@ -2,12 +2,17 @@
 
 from __future__ import annotations
 
+import os
+
+import httpx
 import pandas as pd
 import plotly.graph_objects as go
 import streamlit as st
 
 from dashboard.components.styles import COLORS
 from dashboard.components.loaders.company import CompanyPageData
+
+API_BASE_URL = os.getenv("API_BASE_URL", "http://localhost:8000")
 
 
 def render_valuation_tab(d: CompanyPageData, rev_growth: float, wacc: float) -> None:
@@ -23,50 +28,61 @@ def render_valuation_tab(d: CompanyPageData, rev_growth: float, wacc: float) -> 
 
     with st.spinner("Running valuation models..."):
         try:
-            from pfs.analysis.valuation import valuation_summary
-
-            val = valuation_summary(d.company["ticker"], revenue_growth=rev_growth, wacc=wacc)
+            ticker = d.company["ticker"]
+            resp = httpx.get(
+                f"{API_BASE_URL}/api/analysis/valuation/{ticker}",
+                params={"revenue_growth": rev_growth, "wacc": wacc},
+                timeout=60,
+            )
+            resp.raise_for_status()
+            val = resp.json()
 
             # ── Rating Banner ──────────────────────────────────────────────────
-            if val.recommendation == "BUY":
+            recommendation = val.get("recommendation", "HOLD")
+            if recommendation == "BUY":
                 rating_emoji = "🟢"
-            elif val.recommendation == "SELL":
+            elif recommendation == "SELL":
                 rating_emoji = "🔴"
             else:
                 rating_emoji = "🟡"
 
             col1, col2, col3, col4 = st.columns(4)
             with col1:
-                st.metric("Rating", f"{rating_emoji} {val.recommendation}")
+                st.metric("Rating", f"{rating_emoji} {recommendation}")
             with col2:
-                st.metric("Target Price", f"${val.target_price:.2f}" if val.target_price else "N/A")
+                tp = val.get("target_price")
+                st.metric("Target Price", f"${tp:.2f}" if tp else "N/A")
             with col3:
                 st.metric(
                     "Current Price",
                     f"${d.current_price:,.2f}" if d.current_price else "N/A",
                 )
             with col4:
-                if val.upside_pct is not None:
-                    st.metric("Upside/Downside", f"{val.upside_pct * 100:+.1f}%")
+                upside = val.get("upside_pct")
+                if upside is not None:
+                    st.metric("Upside/Downside", f"{upside * 100:+.1f}%")
                 else:
                     st.metric("Upside/Downside", "N/A")
 
             st.markdown("---")
 
             # ── DCF Model ──────────────────────────────────────────────────────
-            if val.dcf:
-                _render_dcf_section(val.dcf, d.current_price)
+            dcf = val.get("dcf")
+            if dcf:
+                _render_dcf_section(dcf, d.current_price)
 
             st.markdown("---")
 
             # ── Scenario Analysis ──────────────────────────────────────────────
-            if val.scenarios and val.scenarios.scenarios:
-                _render_scenarios_section(val.scenarios, d.current_price)
+            scenarios = val.get("scenarios")
+            if scenarios and scenarios.get("scenarios"):
+                _render_scenarios_section(scenarios, d.current_price)
 
             # ── Peer Comps ────────────────────────────────────────────────────
-            if val.comps and val.comps.peers:
+            comps = val.get("comps")
+            if comps and comps.get("peers"):
                 st.markdown("---")
-                _render_comps_section(val.comps)
+                _render_comps_section(comps)
 
         except Exception as e:
             st.error(f"Valuation error: {e}")
@@ -77,26 +93,26 @@ def render_valuation_tab(d: CompanyPageData, rev_growth: float, wacc: float) -> 
 # Private helpers
 # ──────────────────────────────────────────────
 
-def _render_dcf_section(dcf, current_price: float | None) -> None:
+def _render_dcf_section(dcf: dict, current_price: float | None) -> None:
     st.markdown('<div class="section-header">📐 DCF Model</div>', unsafe_allow_html=True)
 
     col1, col2, col3, col4 = st.columns(4)
     with col1:
-        st.metric("Enterprise Value", f"${dcf.enterprise_value / 1e9:.1f}B")
+        st.metric("Enterprise Value", f"${dcf['enterprise_value'] / 1e9:.1f}B")
     with col2:
-        st.metric("Net Debt", f"${dcf.net_debt / 1e9:.1f}B")
+        st.metric("Net Debt", f"${dcf['net_debt'] / 1e9:.1f}B")
     with col3:
-        st.metric("Equity Value", f"${dcf.equity_value / 1e9:.1f}B")
+        st.metric("Equity Value", f"${dcf['equity_value'] / 1e9:.1f}B")
     with col4:
-        st.metric("Implied Price", f"${dcf.implied_price:.2f}")
+        st.metric("Implied Price", f"${dcf['implied_price']:.2f}")
 
-    fcf_years = list(range(1, dcf.projection_years + 1))
+    fcf_years = list(range(1, dcf["projection_years"] + 1))
     fig_fcf = go.Figure()
     fig_fcf.add_trace(go.Bar(
         x=[f"Year {y}" for y in fcf_years],
-        y=[f / 1e9 for f in dcf.projected_fcf],
+        y=[f / 1e9 for f in dcf["projected_fcf"]],
         marker_color=COLORS["primary"],
-        text=[f"${f / 1e9:.1f}B" for f in dcf.projected_fcf],
+        text=[f"${f / 1e9:.1f}B" for f in dcf["projected_fcf"]],
         textposition="outside",
     ))
     fig_fcf.update_layout(
@@ -116,25 +132,26 @@ def _render_dcf_section(dcf, current_price: float | None) -> None:
                 "Projection Years", "Shares Outstanding",
             ],
             "Value": [
-                f"{dcf.revenue_growth_rates[0] * 100:.1f}%",
-                f"{dcf.operating_margin * 100:.1f}%",
-                f"{dcf.wacc * 100:.1f}%",
-                f"{dcf.terminal_growth * 100:.1f}%",
-                f"{dcf.tax_rate * 100:.1f}%",
-                f"{dcf.capex_pct_revenue * 100:.1f}%",
-                str(dcf.projection_years),
-                f"{dcf.shares_outstanding / 1e6:,.0f}M",
+                f"{dcf['revenue_growth_rates'][0] * 100:.1f}%",
+                f"{dcf['operating_margin'] * 100:.1f}%",
+                f"{dcf['wacc'] * 100:.1f}%",
+                f"{dcf['terminal_growth'] * 100:.1f}%",
+                f"{dcf['tax_rate'] * 100:.1f}%",
+                f"{dcf['capex_pct_revenue'] * 100:.1f}%",
+                str(dcf["projection_years"]),
+                f"{dcf['shares_outstanding'] / 1e6:,.0f}M",
             ],
         })
         st.dataframe(assumptions_df, width="stretch", hide_index=True)
 
-    if dcf.sensitivity:
+    sensitivity = dcf.get("sensitivity")
+    if sensitivity:
         st.markdown('<div class="section-header">🔥 Sensitivity Analysis</div>', unsafe_allow_html=True)
         st.caption("Implied price at different WACC / Terminal Growth combinations")
 
-        waccs = sorted(set(s["wacc"] for s in dcf.sensitivity))
-        tgs = sorted(set(s["terminal_growth"] for s in dcf.sensitivity))
-        price_map = {(s["wacc"], s["terminal_growth"]): s["price"] for s in dcf.sensitivity}
+        waccs = sorted(set(s["wacc"] for s in sensitivity))
+        tgs = sorted(set(s["terminal_growth"] for s in sensitivity))
+        price_map = {(s["wacc"], s["terminal_growth"]): s["price"] for s in sensitivity}
 
         z_data = [
             [price_map.get((w, tg), 0) or 0 for tg in tgs]
@@ -160,10 +177,10 @@ def _render_dcf_section(dcf, current_price: float | None) -> None:
         st.plotly_chart(fig_heatmap, width="stretch")
 
 
-def _render_scenarios_section(scenarios_result, current_price: float | None) -> None:
+def _render_scenarios_section(scenarios_result: dict, current_price: float | None) -> None:
     st.markdown('<div class="section-header">📊 Scenario Analysis</div>', unsafe_allow_html=True)
 
-    scenarios = scenarios_result.scenarios
+    scenarios = scenarios_result["scenarios"]
     scenario_names, scenario_prices, scenario_colors = [], [], []
 
     for name, label, color in [
@@ -225,11 +242,11 @@ def _render_scenarios_section(scenarios_result, current_price: float | None) -> 
         st.dataframe(pd.DataFrame(scenario_rows), width="stretch", hide_index=True)
 
 
-def _render_comps_section(comps_result) -> None:
+def _render_comps_section(comps_result: dict) -> None:
     st.markdown('<div class="section-header">🏢 Peer Comparison</div>', unsafe_allow_html=True)
 
     peer_rows = []
-    t = comps_result.target_metrics
+    t = comps_result["target_metrics"]
     peer_rows.append({
         "Ticker": f"⭐ {t['ticker']}",
         "Name": (t.get("name") or "")[:25],
@@ -239,7 +256,7 @@ def _render_comps_section(comps_result) -> None:
         "Gross Margin": f"{t['gross_margin'] * 100:.1f}%" if t.get("gross_margin") else "N/A",
         "Op Margin": f"{t['operating_margin'] * 100:.1f}%" if t.get("operating_margin") else "N/A",
     })
-    for p in comps_result.peers:
+    for p in comps_result["peers"]:
         peer_rows.append({
             "Ticker": p["ticker"],
             "Name": (p.get("name") or "")[:25],
@@ -252,14 +269,14 @@ def _render_comps_section(comps_result) -> None:
 
     st.dataframe(pd.DataFrame(peer_rows), width="stretch", hide_index=True)
 
-    if comps_result.implied_pe or comps_result.implied_ps:
+    if comps_result.get("implied_pe") or comps_result.get("implied_ps"):
         col1, col2, col3 = st.columns(3)
         with col1:
-            if comps_result.implied_pe:
-                st.metric("Implied (Peer P/E)", f"${comps_result.implied_pe:.2f}")
+            if comps_result.get("implied_pe"):
+                st.metric("Implied (Peer P/E)", f"${comps_result['implied_pe']:.2f}")
         with col2:
-            if comps_result.implied_ps:
-                st.metric("Implied (Peer P/S)", f"${comps_result.implied_ps:.2f}")
+            if comps_result.get("implied_ps"):
+                st.metric("Implied (Peer P/S)", f"${comps_result['implied_ps']:.2f}")
         with col3:
-            if comps_result.median_implied_price:
-                st.metric("Median Implied", f"${comps_result.median_implied_price:.2f}")
+            if comps_result.get("median_implied_price"):
+                st.metric("Median Implied", f"${comps_result['median_implied_price']:.2f}")
