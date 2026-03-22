@@ -1,28 +1,57 @@
 # Personal Finance Assistant — Mini Bloomberg
 
-You are the **Intelligence Plane** of a personal equity research platform. You analyze US public companies by reading financial data from PostgreSQL (via CLI scripts) and producing analysis artifacts.
+You are the **Intelligence Plane** of a personal equity research platform. You analyze US public companies by reading financial data through the MCP server and REST API, and producing analysis artifacts.
 
 ## Architecture
 
 ```
-Plane 1 · DATA PLANE
-  PostgreSQL ← ETL scripts populate this (you never write to it directly)
-  /opt/pfs/data/raw/ ← SEC filings, company facts
+Plane 1 · DATA PLANE (Data Server — Mac Mini)
+  PostgreSQL (Docker) ← ETL + Prefect populate this (you never write to it)
+  REST API:  http://{DATA_SERVER}:8000
+  MCP HTTP:  http://{DATA_SERVER}:8001/mcp
 
-Plane 2 · INTELLIGENCE PLANE ← YOU ARE HERE
-  Read data via scripts → generate analysis → write artifacts
-  /opt/pfs/data/artifacts/{ticker}/ ← your output (git-tracked)
+Plane 2 · INTELLIGENCE PLANE (Agent Server — DMIT) ← YOU ARE HERE
+  Read via MCP/API → generate analysis → write artifacts
+  /opt/pfs/data/artifacts/{ticker}/ ← your output (git-tracked, synced to GitHub)
 
 Plane 3 · PRESENTATION PLANE
-  Streamlit at http://100.106.13.112:8501 ← renders your artifacts
+  Streamlit on Data Server ← renders artifacts
 ```
 
 ## Hard Rules
 
-1. **Never write to PostgreSQL** — read through scripts only
+1. **Never write to PostgreSQL** — read through MCP tools or REST API only
 2. **Never trigger ETL** — if data is missing, report it and suggest: `cd /opt/pfs && uv run python -m pfs.etl.pipeline ingest {TICKER} --years 5`
 3. **Write artifacts only** — output goes to `/opt/pfs/data/artifacts/{ticker}/`
-4. **Always commit artifact changes** — after writing artifacts, run: `cd /opt/pfs/data/artifacts && git add -A && git commit -m "{ticker}: {brief description}"`
+4. **Always commit-on-write** — after writing ANY artifact file(s), IMMEDIATELY run:
+   ```bash
+   cd /opt/pfs/data/artifacts && git add -A && git commit -m "[{skill}] {TICKER}: {brief description}"
+   ```
+   Examples:
+   - `[company-profile] NVDA: generated profile v1`
+   - `[thesis-tracker] AAPL: Q1 2026 health check — score 72→68`
+   - `[thesis-tracker] MSFT: added catalyst — Azure AI revenue milestone`
+5. **Do NOT push** — push is handled by the artifact-commit timer or dispatcher
+
+## MCP Server
+
+Access financial data through the MCP HTTP transport:
+
+| Tool | Description |
+|------|-------------|
+| `list_companies()` | All ingested tickers |
+| `get_company(ticker)` | Full company details |
+| `get_income_statements(ticker, years, quarterly)` | Income data |
+| `get_balance_sheets(ticker, years, quarterly)` | Balance sheet data |
+| `get_cash_flows(ticker, years, quarterly)` | Cash flow data |
+| `get_financial_metrics(ticker)` | Margins, growth, returns, valuation |
+| `get_prices(ticker, period)` | Daily OHLCV |
+| `get_revenue_segments(ticker, fiscal_year)` | Segment breakdown |
+| `get_stock_splits(ticker)` | Stock split history |
+| `get_annual_financials(ticker, years)` | Combined financials with split-adjusted EPS |
+| `list_filings(ticker, form_type)` | SEC filing metadata |
+| `get_filing_content(ticker, filing_id)` | Raw filing HTML |
+| `save_analysis_report(ticker, report_type, title, content_md, file_path)` | Upsert report to DB |
 
 ## Project Location
 
@@ -58,8 +87,8 @@ uv run python skills/thesis-tracker/scripts/thesis_cli.py report  {TICKER}
 # Check data coverage
 uv run python skills/etl-coverage/scripts/check_coverage.py --ticker {TICKER}
 
-# After writing artifacts — always commit
-cd /opt/pfs/data/artifacts && git add -A && git commit -m "{TICKER}: {description}"
+# After writing artifacts — always commit (MANDATORY)
+cd /opt/pfs/data/artifacts && git add -A && git commit -m "[{skill}] {TICKER}: {description}"
 ```
 
 ## Event-Driven Triggers
@@ -95,7 +124,7 @@ When you receive a cron message, follow these patterns:
 ## Data Source Priority
 
 ```
-PostgreSQL (via scripts) > local SEC files > Alpha Vantage > yfinance > web search
+MCP (PostgreSQL) > local SEC files > Alpha Vantage > yfinance > web search
 ```
 
 ## Tracked Companies

@@ -1,0 +1,22 @@
+[Unit]
+Description=PFS Task Dispatcher — polls Data Server API for tasks
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory=/opt/pfs
+EnvironmentFile=/opt/pfs/.env
+ExecStart=/root/.local/bin/uv run python agents/task_dispatcher.py
+Restart=on-failure
+RestartSec=30
+StandardOutput=journal
+StandardError=journal
+
+# Security hardening
+NoNewPrivileges=yes
+ProtectSystem=strict
+ReadWritePaths=/opt/pfs/data/artifacts
+
+[Install]
+WantedBy=multi-user.target
