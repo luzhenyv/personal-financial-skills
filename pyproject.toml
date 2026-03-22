@@ -27,6 +27,7 @@ dependencies = [
     "pydantic>=2.0",
     "yfinance>=1.2.0",
     "pypdf2>=3.0.1",
+    "prefect>=3.6.23",
 ]
 
 [project.optional-dependencies]

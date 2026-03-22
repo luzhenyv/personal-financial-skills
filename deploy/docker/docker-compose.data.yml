@@ -1,0 +1,41 @@
+# Data Server — PostgreSQL 16 + pgAdmin
+# Usage: docker compose -f deploy/docker/docker-compose.data.yml up -d
+#
+# Reads from: deploy/docker/.env.data-server (copy from .env.data-server.example)
+
+services:
+  postgres:
+    image: postgres:16
+    container_name: pfs-postgres
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-pfs}
+      POSTGRES_PASSWORD: ${PFS_DB_PASSWORD:?Set PFS_DB_PASSWORD in .env.data-server}
+      POSTGRES_DB: ${POSTGRES_DB:-personal_finance}
+    ports:
+      - "${TAILSCALE_IP:-127.0.0.1}:5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./../../pfs/db/schema.sql:/docker-entrypoint-initdb.d/01-schema.sql
+      - ./../../pfs/db/agent_ops.sql:/docker-entrypoint-initdb.d/02-agent-ops.sql
+      - ./../../deploy/postgres/pfs-tuning.conf:/etc/postgresql/conf.d/pfs-tuning.conf
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U pfs -d personal_finance"]
+      interval: 5s
+      retries: 5
+    restart: unless-stopped
+
+  pgadmin:
+    image: dpage/pgadmin4
+    container_name: pfs-pgadmin
+    environment:
+      PGADMIN_DEFAULT_EMAIL: ${PGADMIN_EMAIL:-admin@local.dev}
+      PGADMIN_DEFAULT_PASSWORD: ${PGADMIN_PASSWORD:-admin}
+    ports:
+      - "${TAILSCALE_IP:-127.0.0.1}:5050:80"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: unless-stopped
+
+volumes:
+  pgdata:

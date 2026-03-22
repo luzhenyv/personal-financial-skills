@@ -1,7 +1,11 @@
 """MCP Server — data tools for Claude agent.
 
-Run:
+Run (stdio — local agent):
     uv run python -m pfs.mcp.server
+
+Run (HTTP — remote agent on port 8001):
+    uv run python -m pfs.mcp.server --http
+    uv run python -m pfs.mcp.server --http --port 8001 --host 0.0.0.0
 """
 
 from __future__ import annotations
@@ -410,4 +414,17 @@ def save_analysis_report(
 # ── Entrypoint ───────────────────────────────────
 
 if __name__ == "__main__":
-    mcp.run(transport="stdio")
+    import argparse
+
+    parser = argparse.ArgumentParser(description="PFS MCP Server")
+    parser.add_argument("--http", action="store_true", help="Use streamable-http transport")
+    parser.add_argument("--host", default="0.0.0.0", help="HTTP bind host (default: 0.0.0.0)")
+    parser.add_argument("--port", type=int, default=8001, help="HTTP bind port (default: 8001)")
+    args = parser.parse_args()
+
+    if args.http:
+        mcp.settings.host = args.host
+        mcp.settings.port = args.port
+        mcp.run(transport="streamable-http")
+    else:
+        mcp.run(transport="stdio")
