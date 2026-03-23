@@ -145,6 +145,67 @@ systemctl status pfs-streamlit pfs-task-dispatcher
 ssh dmitserver 'cd /opt/pfs && git pull origin main && systemctl restart pfs-streamlit pfs-task-dispatcher'
 ```
 
+## Agent Server Demo Mode (SQLite + Local Data Plane)
+
+Use this mode on the smaller DMIT box when you want to run the full demo stack on one machine without PostgreSQL. PostgreSQL support stays in the codebase and deployment scripts, but the local demo path uses SQLite to reduce RAM and operational overhead.
+
+### What Runs Locally
+
+| Component | Port | Storage / Notes |
+|----------|------|------------------|
+| **FastAPI** | `8000` | backed by SQLite file at `/opt/pfs/data/personal_finance.db` |
+| **MCP HTTP** | `8001` | reads the same SQLite-backed application DB |
+| **Prefect UI** | `4200` | Prefect server metadata stays in Prefect's own local state |
+| **Prefect Worker** | n/a | runs mechanical flows on the same server |
+| **Streamlit** | `8501` | still served from the agent server |
+
+### Access Model
+
+- Bind UI/API services to the server's **Tailscale IP**, not `0.0.0.0`
+- Keep OpenClaw loopback-only
+- Point Streamlit and the dispatcher at the same-server FastAPI/MCP endpoints over the Tailscale address
+- If you want stricter enforcement than bind-address isolation, add host firewall rules that only allow inbound `4200`, `8000`, `8001`, and `8501` from `100.64.0.0/10`
+
+### Setup
+
+```bash
+ssh dmitserver
+cd /opt/pfs
+bash deploy/scripts/setup-agent-server.sh --with-local-data-plane
+```
+
+The setup script will:
+
+- write local SQLite-oriented values into `/opt/pfs/.env`
+- initialize `/opt/pfs/data/personal_finance.db`
+- seed the unified task registry
+- install and enable `pfs-api`, `pfs-mcp`, `pfs-prefect`, `pfs-prefect-worker`, `pfs-streamlit`, and `pfs-task-dispatcher`
+- register Prefect deployments and start a process worker pool
+
+### Optional: Migrate Existing PostgreSQL Data
+
+If you want the DMIT demo to keep the current database contents instead of starting from an empty SQLite file, run:
+
+```bash
+cd /opt/pfs
+uv run python scripts/migrate_postgres_to_sqlite.py \
+  --source-url 'postgresql://pfs:<password>@100.124.144.100:5432/personal_finance' \
+  --target-url 'sqlite:////opt/pfs/data/personal_finance.db' \
+  --init-target
+```
+
+### Verify
+
+```bash
+systemctl status pfs-api pfs-mcp pfs-prefect pfs-prefect-worker pfs-streamlit pfs-task-dispatcher
+curl http://100.106.13.112:8000/health
+curl http://100.106.13.112:8000/api/tasks/schedule
+```
+
+### Future Upgrade Path
+
+When you move to the larger 4-6 GB server, switch `DATABASE_URL` back to PostgreSQL, keep the same FastAPI/MCP/Prefect topology, and treat SQLite demo mode as a lightweight deployment profile rather than a permanent architecture fork.
+
 ### Remaining systemd services (Agent Server only)
 
 | Service | Purpose |
@@ -185,3 +246,20 @@ ssh dmitserver 'cd /opt/pfs && git pull origin main && systemctl restart pfs-str
 ```
 
 Or use the full update script: `bash deploy/scripts/deploy.sh`
+
+---
+
+## Troubleshooting
+
+### Chrome returns 502 but `curl` works (Clash / ClashX proxy)
+
+If you're running **Clash**, **ClashX**, or a similar proxy on your Mac, Chrome routes traffic through the local proxy (typically `127.0.0.1:7897`). The proxy cannot resolve Tailscale CGNAT addresses (`100.64.0.0/10`), so it returns **HTTP 502 Bad Gateway** — even though `curl` (which bypasses system proxy) works fine.
+
+**Fix — add a DIRECT rule in your Clash config:**
+
+```yaml
+rules:
+  - IP-CIDR,100.64.0.0/10,DIRECT
+```
+
+This tells Clash to bypass the proxy for all Tailscale IPs. After saving the config and reloading Clash, hard-refresh Chrome (`Cmd + Shift + R`) — the dashboard should load.

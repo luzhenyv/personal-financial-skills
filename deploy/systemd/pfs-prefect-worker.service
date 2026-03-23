@@ -1,0 +1,21 @@
+[Unit]
+Description=Mini Bloomberg - Prefect Worker
+After=network-online.target pfs-prefect.service
+Wants=network-online.target pfs-prefect.service
+
+[Service]
+Type=simple
+WorkingDirectory=/opt/pfs
+EnvironmentFile=/opt/pfs/.env
+Environment=PYTHONUNBUFFERED=1
+ExecStart=/root/.local/bin/uv run prefect worker start --pool ${PFS_PREFECT_POOL}
+Restart=on-failure
+RestartSec=10
+StandardOutput=journal
+StandardError=journal
+NoNewPrivileges=true
+ProtectSystem=strict
+ReadWritePaths=/opt/pfs/data /tmp /root/.prefect
+
+[Install]
+WantedBy=multi-user.target

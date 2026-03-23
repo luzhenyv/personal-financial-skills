@@ -20,16 +20,22 @@ echo "=== Updating OpenClaw CLAUDE.md ==="
 cp "$PROJECT_DIR/agents/openclaw/CLAUDE.md" /root/.openclaw/workspace/CLAUDE.md
 
 echo "=== Restarting services ==="
-systemctl restart pfs-streamlit
-systemctl restart pfs-task-dispatcher
+for service in pfs-api pfs-mcp pfs-prefect pfs-prefect-worker pfs-streamlit pfs-task-dispatcher; do
+	if systemctl list-unit-files "$service.service" >/dev/null 2>&1; then
+		systemctl restart "$service"
+	fi
+done
 
 echo "=== Status ==="
-systemctl status pfs-streamlit --no-pager -l | head -10
-echo "---"
-systemctl status pfs-task-dispatcher --no-pager -l | head -10
-echo "---"
-echo "Data Server API health (via Tailscale):"
-curl -s http://100.124.144.100:8000/health || echo "Data Server not responding"
+for service in pfs-api pfs-mcp pfs-prefect pfs-prefect-worker pfs-streamlit pfs-task-dispatcher; do
+	if systemctl list-unit-files "$service.service" >/dev/null 2>&1; then
+		systemctl status "$service" --no-pager -l | head -10
+		echo "---"
+	fi
+done
+echo "API health:"
+source "$PROJECT_DIR/.env"
+curl -s "${PFS_API_URL:-http://100.124.144.100:8000}/health" || echo "API not responding"
 echo ""
 echo "Streamlit: http://100.106.13.112:8501"
 echo "=== Deploy complete ==="

@@ -54,3 +54,4 @@ data/reports/*
 !data/artifacts/.gitkeep
 !data/reports/.gitkeep
 uv.lock
+my-private-notepad.md

@@ -1,19 +1,19 @@
 [Unit]
 Description=Mini Bloomberg — Streamlit Presentation Plane
-After=network.target pfs-api.service
-Wants=pfs-api.service
+After=network-online.target
+Wants=network-online.target
 
 [Service]
 Type=simple
 WorkingDirectory=/opt/pfs
+EnvironmentFile=/opt/pfs/.env
 ExecStart=/root/.local/bin/uv run streamlit run dashboard/app.py \
-    --server.port 8501 \
-    --server.address 100.106.13.112 \
+    --server.port ${PFS_STREAMLIT_PORT} \
+    --server.address ${PFS_STREAMLIT_BIND_HOST} \
     --server.headless true \
     --browser.gatherUsageStats false
 Restart=on-failure
 RestartSec=5
-Environment=API_BASE_URL=http://100.124.144.100:8000
 
 # Hardening
 NoNewPrivileges=true

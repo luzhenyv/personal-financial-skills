@@ -1,0 +1,24 @@
+[Unit]
+Description=Mini Bloomberg - FastAPI Data Plane
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory=/opt/pfs
+EnvironmentFile=/opt/pfs/.env
+Environment=PYTHONUNBUFFERED=1
+ExecStart=/root/.local/bin/uv run uvicorn pfs.api.app:app \
+    --host ${PFS_API_BIND_HOST} \
+    --port ${PFS_API_PORT} \
+    --log-level info
+Restart=on-failure
+RestartSec=5
+StandardOutput=journal
+StandardError=journal
+NoNewPrivileges=true
+ProtectSystem=strict
+ReadWritePaths=/opt/pfs/data /tmp
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,21 @@
+[Unit]
+Description=Mini Bloomberg - Prefect Server
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory=/opt/pfs
+EnvironmentFile=/opt/pfs/.env
+Environment=PYTHONUNBUFFERED=1
+ExecStart=/root/.local/bin/uv run prefect server start --host ${PFS_PREFECT_BIND_HOST} --port ${PFS_PREFECT_PORT}
+Restart=on-failure
+RestartSec=5
+StandardOutput=journal
+StandardError=journal
+NoNewPrivileges=true
+ProtectSystem=strict
+ReadWritePaths=/opt/pfs/data /tmp /root/.prefect
+
+[Install]
+WantedBy=multi-user.target
