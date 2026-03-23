@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # deploy.sh — Pull latest code and restart Agent Server services
 # Run on the Agent Server (DMIT): ssh dmitserver "bash /opt/pfs/deploy/scripts/deploy.sh"
-# NOTE: Data Server (Mac) has no systemd — restart FastAPI/MCP manually there.
+# NOTE: Data Server (Mac) has no systemd — restart FastAPI manually there.
 set -euo pipefail
 
 export PATH="$HOME/.local/bin:$PATH"
@@ -25,14 +25,14 @@ for skill in company-profile thesis-tracker etl-coverage; do
 done
 
 echo "=== Restarting services ==="
-for service in pfs-api pfs-mcp pfs-prefect pfs-prefect-worker pfs-streamlit pfs-task-dispatcher; do
+for service in pfs-api pfs-prefect pfs-prefect-worker pfs-streamlit pfs-task-dispatcher; do
 	if systemctl list-unit-files "$service.service" >/dev/null 2>&1; then
 		systemctl restart "$service"
 	fi
 done
 
 echo "=== Status ==="
-for service in pfs-api pfs-mcp pfs-prefect pfs-prefect-worker pfs-streamlit pfs-task-dispatcher; do
+for service in pfs-api pfs-prefect pfs-prefect-worker pfs-streamlit pfs-task-dispatcher; do
 	if systemctl list-unit-files "$service.service" >/dev/null 2>&1; then
 		systemctl status "$service" --no-pager -l | head -10
 		echo "---"

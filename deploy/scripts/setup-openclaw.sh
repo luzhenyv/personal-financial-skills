@@ -32,12 +32,11 @@ cp "$PROJECT_DIR/agents/openclaw/CLAUDE.md" "$OC_WORKSPACE/CLAUDE.md"
 # 4. Create flags directory for event-driven triggers
 mkdir -p "$PROJECT_DIR/data/artifacts/_flags"
 
-# 5. Configure MCP HTTP endpoint (from .env)
+# 5. Verify setup
 if [[ -f "$PROJECT_DIR/.env" ]]; then
     source "$PROJECT_DIR/.env"
 fi
-MCP_URL="${PFS_MCP_URL:-http://127.0.0.1:8001/mcp}"
-echo "MCP HTTP endpoint: $MCP_URL"
+echo "API endpoint: ${PFS_API_URL:-http://127.0.0.1:8000}"
 
 # 6. Ensure artifact git repo has GitHub remote
 ARTIFACTS_DIR="$PROJECT_DIR/data/artifacts"

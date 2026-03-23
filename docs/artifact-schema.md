@@ -35,7 +35,7 @@ artifacts/
   "sector": "Technology",
   "industry": "Semiconductors",
   "exchange": "NASDAQ",
-  "data_sources": ["mcp", "sec_raw"],
+  "data_sources": ["rest_api", "sec_raw"],
 
   "fundamentals": {
     "revenue_ttm": 113000000000,
@@ -102,7 +102,7 @@ artifacts/
   "ticker": "NVDA",
   "period": "2025-Q3",
   "filing_type": "10-Q",
-  "data_sources": ["mcp", "sec_raw"],
+  "data_sources": ["rest_api", "sec_raw"],
 
   "headline_metrics": {
     "revenue": 35082000000,

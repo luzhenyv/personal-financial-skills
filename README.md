@@ -1,6 +1,6 @@
 # Personal Financial Skills — Mini Bloomberg
 
-A one-person AI-powered equity research platform built around three decoupled planes: a **Mini Bloomberg** data engine (PostgreSQL + ETL), an **AI Agent** layer that generates analysis artifacts, and a **Streamlit** dashboard for review.
+A one-person AI-powered equity research platform built around three decoupled planes: a **Mini Bloomberg** data engine (Database + ETL), an **AI Agent** layer that generates analysis artifacts, and a **Streamlit** dashboard for review.
 
 ---
 
@@ -8,11 +8,11 @@ A one-person AI-powered equity research platform built around three decoupled pl
 
 ```mermaid
 graph TD
-    A["📊 PLANE 1 · DATA PLANE<br/>(Mini Bloomberg)<br/><br/>ETL Pipeline → PostgreSQL + raw/<br/>Single Source of Truth"]
-    B["🧠 PLANE 2 · INTELLIGENCE PLANE<br/>(Agent + Skills)<br/><br/>Reads MCP → Generates Artifacts<br/>Profile, Thesis, ETL Coverage"]
+    A["📊 PLANE 1 · DATA PLANE<br/>(Mini Bloomberg)<br/><br/>ETL Pipeline → Database + raw/<br/>Single Source of Truth"]
+    B["🧠 PLANE 2 · INTELLIGENCE PLANE<br/>(Agent + Skills)<br/><br/>Reads REST API → Generates Artifacts<br/>Profile, Thesis, ETL Coverage"]
     C["📈 PLANE 3 · PRESENTATION PLANE<br/>(Streamlit)<br/><br/>Renders Artifacts & Charts<br/>Never Writes, Never Triggers ETL"]
     
-    A -->|MCP + REST API<br/>Read-Only Contract| B
+    A -->|REST API<br/>Read-Only Contract| B
     B -->|Writes to<br/>data/artifacts/| B
     B -->|Reads Artifacts + API| C
     
@@ -23,7 +23,7 @@ graph TD
 
 **Three hard boundaries:**
 - Streamlit **never writes** — it only reads artifacts and calls the API
-- The Agent **never touches PostgreSQL** — it reads through MCP / REST API
+- The Agent **never touches the database directly** — it reads through the REST API
 - ETL **never calls the Agent** — data ingestion is a separate, scheduled process
 
 ### Two-Server Topology (Target)
@@ -32,7 +32,6 @@ graph TD
 |---------|-------------|--------------|
 | PostgreSQL + pgAdmin | Docker | — |
 | FastAPI (`:8000`) | Native | — |
-| MCP Server (`:8001`) | Native (HTTP transport) | — |
 | ETL Pipeline | Native | — |
 | Prefect (`:4200`) | Native | — |
 | Streamlit (`:8501`) | — | Service |
@@ -40,7 +39,7 @@ graph TD
 | OpenClaw Agent | — | Installed |
 | Artifact Git Repo | — | Separate `.git` |
 
-> **Hard rule**: The Agent Server has **zero** database dependencies — all data access goes through REST API or MCP HTTP.
+> **Hard rule**: The Agent Server has **zero** database dependencies — all data access goes through the REST API.
 
 For full design details see [`docs/architecture.md`](docs/architecture.md) and [`docs/migration-plan.md`](docs/migration-plan.md).
 
@@ -62,10 +61,8 @@ graph LR
     ETL --> RAW["data/raw/<br/>SEC Filings<br/>Local Cache"]
     
     PG -->|FastAPI :8000| API["REST API"]
-    PG -->|MCP :8001| MCP["MCP Server"]
     
     API --> SKILLS["Agent + Skills"]
-    MCP --> SKILLS
     
     SKILLS -->|Writes| ARTIFACTS["data/artifacts/<br/>profile/<br/>thesis/<br/>..."]
     
@@ -77,13 +74,12 @@ graph LR
     style ETL fill:#fff9c4
     style PG fill:#c8e6c9
     style API fill:#bbdefb
-    style MCP fill:#bbdefb
     style SKILLS fill:#f8bbd0
     style ARTIFACTS fill:#e1bee7
     style STREAMLIT fill:#c7ceea
 ```
 
-**Data source priority**: `MCP (PostgreSQL) > local SEC files > Alpha Vantage > yfinance > web search`
+**Data source priority**: `REST API (database) > local SEC files > Alpha Vantage > yfinance > web search`
 
 ---
 
@@ -97,7 +93,7 @@ personal-financial-skills/
 │   │                              #     analysis (heavy compute), tasks (CRUD)
 │   ├── db/                        #   SQLAlchemy models + session + schema
 │   ├── etl/                       #   ETL pipeline + SEC/price/yfinance clients
-│   ├── mcp/                       #   MCP server (HTTP transport)
+│   ├── mcp/                       #   MCP server (kept but not run in production)
 │   ├── analysis/                  #   Heavy compute (profile, valuation, report)
 │   ├── tasks/                     #   Task queue models
 │   ├── config.py                  #   App configuration
@@ -109,7 +105,7 @@ personal-financial-skills/
 │   │   ├── artifact_io.py         #     Generic artifact read/write
 │   │   ├── api_client.py          #     HTTP client for Data Server REST API
 │   │   ├── task_client.py         #     HTTP client for task CRUD
-│   │   └── mcp_helpers.py         #     Common MCP call patterns
+│   │   └── mcp_helpers.py         #     Common MCP call patterns (legacy)
 │   ├── company-profile/           #   Company tearsheet generation
 │   ├── thesis-tracker/            #   Investment thesis CRUD + health checks
 │   └── etl-coverage/              #   Data coverage auditing
@@ -206,8 +202,9 @@ uv run python skills/thesis-tracker/scripts/thesis_cli.py check   {TICKER}
 uv run python skills/thesis-tracker/scripts/thesis_cli.py catalyst {TICKER} --add
 uv run python skills/thesis-tracker/scripts/thesis_cli.py report  {TICKER}
 
-# MCP Server
-uv run python -m pfs.mcp.server
+# API
+uv run uvicorn pfs.api.app:app --reload
+# → http://localhost:8000/docs
 ```
 
 ---
@@ -247,11 +244,10 @@ See [`docs/api.md`](docs/api.md) for full documentation.
 
 | Component | Technology |
 |---|---|
-| Database | PostgreSQL 16 (Docker) |
+| Database | PostgreSQL 16 (Docker) or SQLite |
 | ETL | Python + httpx + SEC EDGAR XBRL API |
 | Conflict resolution | Alpha Vantage API + yfinance |
 | Backend API | FastAPI |
-| MCP Server | FastMCP (HTTP transport) |
 | Agent | Claude + Skills |
 | Scheduling | Prefect |
 | Dashboard | Streamlit + Plotly |

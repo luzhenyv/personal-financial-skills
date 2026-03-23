@@ -30,9 +30,9 @@ An agent (Claude Code, GitHub Copilot, etc.) reads the SKILL.md and follows its 
 ```
 Agent: "I need to create a company profile for NVDA"
 → Reads skills/company-profile/SKILL.md
-→ Checks prerequisite: is data in MCP? (calls list_companies, get_company)
+→ Checks prerequisite: is data in the API? (calls GET /api/companies/)
 → If not, tells user to run ETL first
-→ Follows Task 1: Company Research (reads MCP + 10k_raw_sections.json)
+→ Follows Task 1: Company Research (reads REST API + 10k_raw_sections.json)
 → Follows Task 2: Financial Analysis (build_comps.py)
 → Follows Task 3: Report Generation (generate_report.py)
 → Artifacts saved to data/artifacts/NVDA/profile/
@@ -40,13 +40,13 @@ Agent: "I need to create a company profile for NVDA"
 
 ## Data Access
 
-Skills access financial data through the MCP server (`personal-finance`), which provides
-read-only access to PostgreSQL. The agent **never writes to PostgreSQL directly**.
+Skills access financial data through the **REST API** (`$PFS_API_URL`), which provides
+read-only access to the database. The agent **never writes to the database directly**.
 
 ### Data Source Priority
 
 ```
-MCP (PostgreSQL) > local SEC files > Alpha Vantage > yfinance > web search
+REST API (database) > local SEC files > Alpha Vantage > yfinance > web search
 ```
 
 ## Artifact Output

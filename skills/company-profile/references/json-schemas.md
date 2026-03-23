@@ -1,14 +1,14 @@
 # Task 1 JSON Schemas
 
-Task 1 is AI-driven — no script needed. Read data from MCP tools and `data/artifacts/{TICKER}/profile/10k_raw_sections.json`, then create each file below in `data/artifacts/{TICKER}/profile/`.
+Task 1 is AI-driven — no script needed. Read data from the REST API and `data/artifacts/{TICKER}/profile/10k_raw_sections.json`, then create each file below in `data/artifacts/{TICKER}/profile/`.
 
 ## Guidelines
 
-- Use MCP tools (`get_income_statements`, `get_revenue_segments`, `get_company`, etc.) as the primary data source
+- Use REST API endpoints (`GET /api/financials/{TICKER}/income-statements`, `GET /api/financials/{TICKER}/segments`, `GET /api/companies/{TICKER}`, etc.) as the primary data source
 - Source qualitative content from Item 1, Item 1A, or Item 7 of the 10-K (via `10k_raw_sections.json`)
 - For `risk_factors.json`: quote or closely paraphrase actual Item 1A language
 - For `competitive_landscape.json`: use tickers that `build_comps.py` can look up on Yahoo Finance
-- Cross-check revenue segment figures against MCP `get_revenue_segments` data
+- Cross-check revenue segment figures against `GET /api/financials/{TICKER}/segments` data
 - Every JSON file must include a `"schema_version": "1.0"` field
 
 ---

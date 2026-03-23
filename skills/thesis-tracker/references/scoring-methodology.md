@@ -42,12 +42,12 @@ If an assumption has no `kpi_metric` (qualitative-only), the objective score def
 
 ### Data Sources
 
-Financial data is read via MCP tools:
-- `get_financial_metrics(ticker)` — latest margins, growth, returns, leverage
-- `get_income_statements(ticker, years=3)` — earnings trajectory
-- `get_prices(ticker, period="3mo")` — recent price trend
+Financial data is read via REST API:
+- `GET /api/financials/{TICKER}/metrics` — latest margins, growth, returns, leverage
+- `GET /api/financials/{TICKER}/income-statements?years=3` — earnings trajectory
+- `GET /api/financials/{TICKER}/prices?period=3mo` — recent price trend
 
-Available KPI metrics from MCP `get_financial_metrics`:
+Available KPI metrics from `GET /api/financials/{TICKER}/metrics`:
 
 | KPI Metric Key | Description |
 |---|---|

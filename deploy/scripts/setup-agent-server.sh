@@ -62,12 +62,9 @@ if [[ ! -f "$PROJECT_DIR/.env" ]]; then
 DATABASE_URL=sqlite:////opt/pfs/data/personal_finance.db
 PFS_TAILSCALE_IP=100.106.13.112
 PFS_API_URL=http://100.106.13.112:8000
-PFS_MCP_URL=http://100.106.13.112:8001/mcp
 API_BASE_URL=http://100.106.13.112:8000
 PFS_API_BIND_HOST=100.106.13.112
 PFS_API_PORT=8000
-PFS_MCP_BIND_HOST=100.106.13.112
-PFS_MCP_PORT=8001
 PFS_STREAMLIT_BIND_HOST=100.106.13.112
 PFS_STREAMLIT_PORT=8501
 PFS_PREFECT_BIND_HOST=100.106.13.112
@@ -87,7 +84,6 @@ ENVEOF
 # Agent Server .env
 # Data Server Tailscale IP: 100.124.144.100
 PFS_API_URL=http://100.124.144.100:8000
-PFS_MCP_URL=http://100.124.144.100:8001/mcp
 API_BASE_URL=http://100.124.144.100:8000
 PFS_STREAMLIT_BIND_HOST=100.106.13.112
 PFS_STREAMLIT_PORT=8501
@@ -110,12 +106,9 @@ else
 # Local SQLite demo mode overrides
 DATABASE_URL=sqlite:////opt/pfs/data/personal_finance.db
 PFS_API_URL=http://100.106.13.112:8000
-PFS_MCP_URL=http://100.106.13.112:8001/mcp
 API_BASE_URL=http://100.106.13.112:8000
 PFS_API_BIND_HOST=100.106.13.112
 PFS_API_PORT=8000
-PFS_MCP_BIND_HOST=100.106.13.112
-PFS_MCP_PORT=8001
 PFS_STREAMLIT_BIND_HOST=100.106.13.112
 PFS_STREAMLIT_PORT=8501
 PFS_PREFECT_BIND_HOST=100.106.13.112
@@ -162,7 +155,6 @@ cp deploy/systemd/pfs-task-dispatcher.service /etc/systemd/system/
 
 if [[ "$ENABLE_LOCAL_DATA_PLANE" -eq 1 ]]; then
     cp deploy/systemd/pfs-api.service /etc/systemd/system/
-    cp deploy/systemd/pfs-mcp.service /etc/systemd/system/
     cp deploy/systemd/pfs-prefect.service /etc/systemd/system/
     cp deploy/systemd/pfs-prefect-worker.service /etc/systemd/system/
 fi
@@ -170,7 +162,7 @@ fi
 systemctl daemon-reload
 systemctl enable pfs-streamlit pfs-task-dispatcher
 if [[ "$ENABLE_LOCAL_DATA_PLANE" -eq 1 ]]; then
-    systemctl enable pfs-api pfs-mcp pfs-prefect pfs-prefect-worker
+    systemctl enable pfs-api pfs-prefect pfs-prefect-worker
 fi
 
 echo "Services installed."
@@ -188,7 +180,7 @@ echo ""
 echo "Starting services..."
 if [[ "$ENABLE_LOCAL_DATA_PLANE" -eq 1 ]]; then
     uv run python scripts/init_db.py --seed-tasks
-    systemctl start pfs-api pfs-mcp pfs-prefect
+    systemctl start pfs-api pfs-prefect
     sleep 5
     /root/.local/bin/uv run prefect work-pool inspect pfs-demo-pool >/dev/null 2>&1 || \
         /root/.local/bin/uv run prefect work-pool create pfs-demo-pool --type process
@@ -200,13 +192,12 @@ systemctl start pfs-streamlit pfs-task-dispatcher
 sleep 3
 systemctl is-active pfs-streamlit pfs-task-dispatcher || true
 if [[ "$ENABLE_LOCAL_DATA_PLANE" -eq 1 ]]; then
-    systemctl is-active pfs-api pfs-mcp pfs-prefect pfs-prefect-worker || true
+    systemctl is-active pfs-api pfs-prefect pfs-prefect-worker || true
 fi
 echo ""
 echo "Streamlit:        http://100.106.13.112:8501"
 if [[ "$ENABLE_LOCAL_DATA_PLANE" -eq 1 ]]; then
     echo "API reachable at: http://100.106.13.112:8000"
-    echo "MCP reachable at: http://100.106.13.112:8001/mcp"
     echo "Prefect UI:       http://100.106.13.112:4200"
 else
     echo "API reachable at: http://100.124.144.100:8000"
@@ -215,7 +206,7 @@ echo ""
 echo "Verify:"
 echo "  systemctl status pfs-streamlit pfs-task-dispatcher"
 if [[ "$ENABLE_LOCAL_DATA_PLANE" -eq 1 ]]; then
-    echo "  systemctl status pfs-api pfs-mcp pfs-prefect pfs-prefect-worker"
+    echo "  systemctl status pfs-api pfs-prefect pfs-prefect-worker"
     echo "  curl http://100.106.13.112:8000/health"
 else
     echo "  curl http://100.124.144.100:8000/health"

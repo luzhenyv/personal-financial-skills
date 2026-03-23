@@ -8,7 +8,7 @@ This document describes the full design of the Mini Bloomberg personal financial
 
 ### Plane 1 · Data Plane (Mini Bloomberg)
 
-The data plane is the only part of the system that talks directly to external sources and writes to PostgreSQL. Everything else in the system reads from this plane through the MCP/REST contract.
+The data plane is the only part of the system that talks directly to external sources and writes to the database. Everything else in the system reads from this plane through the REST API.
 
 **Components:**
 - **ETL pipeline** — ingests SEC EDGAR filings (XBRL), validates against yfinance, resolves conflicts via Alpha Vantage
@@ -39,12 +39,12 @@ raw/
 
 ### Plane 2 · Intelligence Plane (Agent + Skills)
 
-The Agent reads structured data through the MCP server and produces analysis artifacts. It never writes to the database.
+The Agent reads structured data through the REST API and produces analysis artifacts. It never writes to the database.
 
 **Data access fallback chain:**
 
 ```
-1. MCP (PostgreSQL)     ← most trustworthy, already validated
+1. REST API (database)  ← most trustworthy, already validated
 2. raw/ SEC parse       ← used when a field is missing from structured data
 3. yfinance             ← supplemental price / basic fundamental data
 4. Alpha Vantage        ← conflict resolution, alternative data
@@ -70,7 +70,7 @@ skills/
 
 ### Plane 3 · Presentation Plane (Streamlit)
 
-Streamlit is a pure read layer. It renders artifacts and calls the MCP API for live data (prices, metrics). It never triggers ETL and never writes artifacts.
+Streamlit is a pure read layer. It renders artifacts and calls the REST API for live data (prices, metrics). It never triggers ETL and never writes artifacts.
 
 **Streamlit page → data source mapping:**
 
@@ -129,7 +129,7 @@ Users have two ways to edit artifacts:
 
 ### REST API
 
-FastAPI exposes both the MCP server tools and standard REST endpoints. See [`docs/api.md`](docs/api.md) for the full reference.
+FastAPI exposes REST endpoints for all financial data access. See [`docs/api.md`](docs/api.md) for the full reference.
 
 ---
 
@@ -144,7 +144,7 @@ Example `profile/2025-Q4.json`:
   "schema_version": "1.0",
   "generated_at": "2025-11-15T10:30:00Z",
   "ticker": "NVDA",
-  "data_sources": ["mcp", "sec_raw"],
+  "data_sources": ["rest_api", "sec_raw"],
   "fundamentals": {
     "revenue_ttm": 113000000000,
     "gross_margin": 0.745,
@@ -184,7 +184,7 @@ These six rules keep the system decoupled as it grows. Violating any of them ten
 | # | Rule | Why |
 |---|---|---|
 | 01 | **ETL only writes to PostgreSQL + `raw/`** | Makes the data plane fully reproducible |
-| 02 | **MCP is read-only — no ETL triggers through MCP** | Prevents Agent from accidentally re-ingesting data |
+| 02 | **REST API is read-only — no ETL triggers through the API** | Prevents Agent from accidentally re-ingesting data |
 | 03 | **Each skill writes to exactly one artifact path** | Allows any skill to be re-run in isolation |
 | 04 | **Skills never call each other — they read artifacts** | Decouples the intelligence plane from execution order |
 | 05 | **Streamlit never writes** | Keeps the presentation layer a pure consumer |
@@ -203,13 +203,13 @@ These six rules keep the system decoupled as it grows. Violating any of them ten
 
 2. PROFILE
    User asks Agent: "Generate a profile for NVDA"
-   → Agent calls MCP: get_financials(), get_metrics(), get_prices()
+   → Agent calls REST API: get financials, metrics, prices
    → Falls back to raw SEC parse for any missing fields
    → Writes data/artifacts/NVDA/profile/ (.md + .json)
 
 3. THESIS
    User asks Agent: "Create thesis for NVDA"
-   → Agent reads MCP data + profile artifacts
+   → Agent reads REST API data + profile artifacts
    → Generates data/artifacts/NVDA/thesis/ (.json files)
    → Agent commits artifacts (commit-on-write)
 

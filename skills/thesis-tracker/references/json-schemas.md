@@ -4,7 +4,7 @@ All thesis artifacts live in `data/artifacts/{TICKER}/thesis/`. Every JSON file 
 
 ## Guidelines
 
-- Use MCP tools (`get_financial_metrics`, `get_income_statements`, `get_company`) as the primary data source for KPI baselines
+- Use REST API endpoints (`GET /api/financials/{TICKER}/metrics`, `GET /api/financials/{TICKER}/income-statements`, `GET /api/companies/{TICKER}`) as the primary data source for KPI baselines
 - Source qualitative content from company-profile artifacts when available
 - Buy reasons and assumptions must be specific and falsifiable
 - Assumption weights must sum to 100%

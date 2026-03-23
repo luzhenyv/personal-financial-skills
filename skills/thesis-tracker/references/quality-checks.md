@@ -4,7 +4,7 @@ Run these checks after completing each task for a given ticker.
 
 ## Prerequisite: Company Data
 
-- [ ] Company exists in MCP: `list_companies` shows the ticker
+- [ ] Company exists in REST API: `GET /api/companies/` shows the ticker
 - [ ] `get_company(ticker)` returns valid company data
 - [ ] If creating a new thesis, check for existing profile artifacts to seed from
 
@@ -31,7 +31,7 @@ Run these checks after completing each task for a given ticker.
 ## After Health Check (Task 3)
 
 - [ ] New entry appended to `health_checks.json` (never overwrites)
-- [ ] Objective score pulls from latest MCP financial data (not stale)
+- [ ] Objective score pulls from latest REST API financial data (not stale)
 - [ ] Subjective score includes specific event references (not generic)
 - [ ] Per-assumption score breakdown is complete (all assumptions scored)
 - [ ] Weights in assumption scores match weights in `thesis.json`
@@ -49,7 +49,7 @@ Run these checks after completing each task for a given ticker.
 ## Output
 
 - [ ] `thesis_{TICKER}.md` saved to `data/artifacts/{TICKER}/thesis/`
-- [ ] Report persisted via MCP `save_analysis_report(ticker, 'thesis_tracker', ...)` to `analysis_reports` table
+- [ ] Report persisted via `POST /api/analysis/reports` with `{ticker, report_type: 'thesis_tracker', ...}` to `analysis_reports` table
 
 **CLI**: All tasks run via `uv run python skills/thesis-tracker/scripts/thesis_cli.py <subcommand> {TICKER}`
 

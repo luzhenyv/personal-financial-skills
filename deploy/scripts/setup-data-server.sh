@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # setup-data-server.sh — One-shot setup for Data Server (Mac local)
-# Runs: PostgreSQL + pgAdmin (Docker), FastAPI :8000, MCP HTTP :8001
+# Runs: PostgreSQL + pgAdmin (Docker), FastAPI :8000
 # NO OpenClaw, NO task dispatcher — those run on Agent Server
 #
 # Prerequisites:
@@ -83,7 +83,7 @@ else
     echo "SQLite mode — no Docker env file required"
 fi
 
-# Also ensure root .env exists for FastAPI / MCP
+# Also ensure root .env exists for FastAPI
 if [[ ! -f "$PROJECT_DIR/.env" ]]; then
     if [[ "$DATA_MODE" == "postgres" ]]; then
         cat > "$PROJECT_DIR/.env" <<'ENVEOF'
@@ -157,18 +157,12 @@ echo "=== [8/8] Starting services ==="
 if [[ "$(uname)" == "Darwin" ]]; then
     # Kill any existing instances
     pkill -f 'uvicorn pfs.api' 2>/dev/null || true
-    pkill -f 'pfs.mcp.server' 2>/dev/null || true
     sleep 1
 
     # FastAPI
     nohup uv run uvicorn pfs.api.app:app --host 0.0.0.0 --port 8000 \
         --log-level info > /tmp/pfs-api.log 2>&1 &
     echo "FastAPI started (PID $!) — logs: /tmp/pfs-api.log"
-
-    # MCP HTTP server (Tailscale-accessible, DNS-rebinding protection disabled)
-    nohup uv run python -m pfs.mcp.server --http --port 8001 --host 0.0.0.0 \
-        > /tmp/pfs-mcp.log 2>&1 &
-    echo "MCP HTTP started (PID $!) — logs: /tmp/pfs-mcp.log"
 
     sleep 3
     echo "Health check:"
@@ -177,7 +171,6 @@ else
     echo "Linux detected — no systemd services defined for Data Server."
     echo "Run manually:"
     echo "  nohup uv run uvicorn pfs.api.app:app --host 0.0.0.0 --port 8000 > /tmp/pfs-api.log 2>&1 &"
-    echo "  nohup uv run python -m pfs.mcp.server --http --port 8001 --host 0.0.0.0 > /tmp/pfs-mcp.log 2>&1 &"
 fi
 
 echo ""
@@ -193,7 +186,6 @@ else
     echo "  SQLite DB  ./data/personal_finance.db"
 fi
 echo "  FastAPI    :8000  (logs: /tmp/pfs-api.log)"
-echo "  MCP HTTP   :8001  (logs: /tmp/pfs-mcp.log)"
 echo ""
 echo "Verify:"
 echo "  curl http://localhost:8000/health"
@@ -206,7 +198,7 @@ if [[ "$DATA_MODE" == "postgres" ]]; then
     echo "  3. Run initial ETL: uv run python -m pfs.etl.pipeline ingest NVDA --years 5"
 else
     echo "  1. If needed, migrate data: uv run python scripts/migrate_postgres_to_sqlite.py --source-url <postgres-url> --target-url sqlite:///./data/personal_finance.db --init-target"
-    echo "  2. Bind FastAPI/MCP to your Tailscale IP when exposing beyond localhost"
+    echo "  2. Bind FastAPI to your Tailscale IP when exposing beyond localhost"
     echo "  3. Run initial ETL: uv run python -m pfs.etl.pipeline ingest NVDA --years 5"
 fi
 echo ""

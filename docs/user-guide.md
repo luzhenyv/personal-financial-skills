@@ -151,15 +151,13 @@ uv run python -m pfs.etl.section_extractor NVDA
 # Docker (PostgreSQL + pgAdmin)
 docker ps
 
-# FastAPI and MCP — check if running
+# FastAPI — check if running
 lsof -iTCP:8000 -sTCP:LISTEN
-lsof -iTCP:8001 -sTCP:LISTEN
 
 # Restart if needed
-pkill -f 'uvicorn pfs.api' ; pkill -f 'pfs.mcp.server'
+pkill -f 'uvicorn pfs.api'
 cd /path/to/personal-financial-skills
 nohup uv run uvicorn pfs.api.app:app --host 0.0.0.0 --port 8000 > /tmp/pfs-api.log 2>&1 &
-nohup uv run python -m pfs.mcp.server --http --port 8001 --host 0.0.0.0 > /tmp/pfs-mcp.log 2>&1 &
 ```
 
 ### Agent Server (DMIT) — check services
@@ -216,5 +214,4 @@ Key endpoints:
 | Event flags (cron triggers) | `data/artifacts/_flags/` |
 | ETL coverage report | `data/artifacts/_etl/coverage_report.json` |
 | FastAPI logs | `/tmp/pfs-api.log` (Mac) |
-| MCP logs | `/tmp/pfs-mcp.log` (Mac) |
 | Agent service logs | `journalctl -u pfs-streamlit -f` (DMIT) |

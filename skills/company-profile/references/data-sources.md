@@ -5,7 +5,7 @@ Maps each data field in the company profile to its source and storage location.
 ## Data Source Priority (Fallback Chain)
 
 ```
-1. MCP (PostgreSQL)     ← most trustworthy, already validated by ETL
+1. REST API (database)  ← most trustworthy, already validated by ETL
 2. Local SEC files      ← data/raw/{ticker}/ 10-K/Q HTML for section text
 3. Alpha Vantage        ← conflict resolution, alternative data
 4. yfinance             ← supplemental price / basic fundamental data
@@ -15,7 +15,7 @@ Maps each data field in the company profile to its source and storage location.
 ## Data Flow
 
 ```
-MCP tools (PostgreSQL) → Agent reads structured data
+REST API (database) → Agent reads structured data
 data/raw/{ticker}/ → Agent reads raw 10-K/Q HTML for section text
 Agent → data/artifacts/{ticker}/profile/ (structured JSON + report)
 ```
@@ -138,7 +138,7 @@ data/
 ├── artifacts/{ticker}/
 │   └── profile/
 │       ├── 10k_raw_sections.json    # Extracted section text (by ETL)
-│       ├── financial_data.json      # Combined financials, split-adjusted (agent via MCP)
+│       ├── financial_data.json      # Combined financials, split-adjusted (agent via REST API)
 │       ├── company_overview.json    # AI-parsed business description
 │       ├── management_team.json     # AI-parsed executive bios
 │       ├── risk_factors.json        # AI-parsed risks + opportunities

@@ -6,10 +6,10 @@ The system runs across two servers connected via Tailscale:
 
 | Server | Role | Tailscale IP | Key Services |
 |--------|------|-------------|-------------|
-| **Data Server** (Mac local) | Database, API, MCP, ETL, Prefect | `100.124.144.100` | PostgreSQL, FastAPI :8000, MCP :8001, Prefect :4200 |
+| **Data Server** (Mac local) | Database, API, ETL, Prefect | `100.124.144.100` | PostgreSQL, FastAPI :8000, Prefect :4200 |
 | **Agent Server** (DMIT) | Agent, Dashboard, Task Dispatcher | `100.106.13.112` | Streamlit :8501, OpenClaw, Task Dispatcher |
 
-**Hard rule**: The Agent Server has zero database dependencies. All data access goes through REST API or MCP HTTP hosted on the Data Server.
+**Hard rule**: The Agent Server has zero database dependencies. All data access goes through the REST API hosted on the Data Server.
 
 ---
 
@@ -21,7 +21,6 @@ The system runs across two servers connected via Tailscale:
 │                                                  │
 │  localhost:5432   ← PostgreSQL (internal only)   │
 │  :8000            ← FastAPI  (Tailscale LAN)     │
-│  :8001            ← MCP HTTP (Agent Server only) │
 │  :4200            ← Prefect UI (LAN only)        │
 │  :5050            ← pgAdmin (LAN only)           │
 └──────────────────────────────────────────────────┘
@@ -73,11 +72,7 @@ uv run python scripts/seed_tasks.py
 nohup uv run uvicorn pfs.api.app:app --host 0.0.0.0 --port 8000 \
   > /tmp/pfs-api.log 2>&1 &
 
-# 5. Start MCP HTTP server (background)
-nohup uv run python -m pfs.mcp.server --http --port 8001 --host 0.0.0.0 \
-  > /tmp/pfs-mcp.log 2>&1 &
-
-# 6. Start Prefect (optional)
+# 5. Start Prefect (optional)
 prefect server start  # UI on :4200
 cd prefect/flows && prefect deploy --all
 ```
@@ -95,7 +90,6 @@ Or use the full setup script: `bash deploy/scripts/setup-data-server.sh`
 - **Docker env file**: `docker-compose.data.yml` requires `--env-file deploy/docker/.env.data-server`. Running without it will fail due to missing `PFS_DB_PASSWORD`.
 - **Postgres data**: stored in Docker named volume `personal-financial-skills_pgdata` — survives `docker compose down`, but not `docker compose down -v`.
 - **Stale container warning**: If postgres was ever started with a different compose file (e.g., before the `src/` → `pfs/` rename), the container will have incorrect volume mounts and fail to start. Fix: `docker rm pfs-postgres` then re-run compose (data volume is safe).
-- **MCP host headers**: The MCP HTTP server disables FastMCP's DNS-rebinding protection (`enable_dns_rebinding_protection=False` in `pfs/mcp/server.py`). This is intentional — the server is only reachable over the Tailscale WireGuard tunnel, not the public internet.
 - **uv.lock is gitignored**: On fresh clones, run `uv sync` (not `uv sync --frozen`).
 
 ---
@@ -121,7 +115,6 @@ uv sync  # NOT --frozen (uv.lock is gitignored)
 # 3. Write .env (Data Server Tailscale IP — not localhost)
 cat > /opt/pfs/.env << 'EOF'
 PFS_API_URL=http://100.124.144.100:8000
-PFS_MCP_URL=http://100.124.144.100:8001/mcp
 PFS_POLL_INTERVAL=60
 PFS_TASK_TIMEOUT=600
 PFS_PROJECT_DIR=/opt/pfs
@@ -154,7 +147,6 @@ Use this mode on the smaller DMIT box when you want to run the full demo stack o
 | Component | Port | Storage / Notes |
 |----------|------|------------------|
 | **FastAPI** | `8000` | backed by SQLite file at `/opt/pfs/data/personal_finance.db` |
-| **MCP HTTP** | `8001` | reads the same SQLite-backed application DB |
 | **Prefect UI** | `4200` | Prefect server metadata stays in Prefect's own local state |
 | **Prefect Worker** | n/a | runs mechanical flows on the same server |
 | **Streamlit** | `8501` | still served from the agent server |
@@ -163,7 +155,7 @@ Use this mode on the smaller DMIT box when you want to run the full demo stack o
 
 - Bind UI/API services to the server's **Tailscale IP**, not `0.0.0.0`
 - Keep OpenClaw loopback-only
-- Point Streamlit and the dispatcher at the same-server FastAPI/MCP endpoints over the Tailscale address
+- Point Streamlit and the dispatcher at the same-server FastAPI endpoints over the Tailscale address
 - If you want stricter enforcement than bind-address isolation, add host firewall rules that only allow inbound `4200`, `8000`, `8001`, and `8501` from `100.64.0.0/10`
 
 ### Setup
@@ -179,7 +171,7 @@ The setup script will:
 - write local SQLite-oriented values into `/opt/pfs/.env`
 - initialize `/opt/pfs/data/personal_finance.db`
 - seed the unified task registry
-- install and enable `pfs-api`, `pfs-mcp`, `pfs-prefect`, `pfs-prefect-worker`, `pfs-streamlit`, and `pfs-task-dispatcher`
+- install and enable `pfs-api`, `pfs-prefect`, `pfs-prefect-worker`, `pfs-streamlit`, and `pfs-task-dispatcher`
 - register Prefect deployments and start a process worker pool
 
 ### Optional: Migrate Existing PostgreSQL Data
@@ -197,14 +189,14 @@ uv run python scripts/migrate_postgres_to_sqlite.py \
 ### Verify
 
 ```bash
-systemctl status pfs-api pfs-mcp pfs-prefect pfs-prefect-worker pfs-streamlit pfs-task-dispatcher
+systemctl status pfs-api pfs-prefect pfs-prefect-worker pfs-streamlit pfs-task-dispatcher
 curl http://100.106.13.112:8000/health
 curl http://100.106.13.112:8000/api/tasks/schedule
 ```
 
 ### Future Upgrade Path
 
-When you move to the larger 4-6 GB server, switch `DATABASE_URL` back to PostgreSQL, keep the same FastAPI/MCP/Prefect topology, and treat SQLite demo mode as a lightweight deployment profile rather than a permanent architecture fork.
+When you move to the larger 4-6 GB server, switch `DATABASE_URL` back to PostgreSQL, keep the same FastAPI/Prefect topology, and treat SQLite demo mode as a lightweight deployment profile rather than a permanent architecture fork.
 
 ### Remaining systemd services (Agent Server only)
 

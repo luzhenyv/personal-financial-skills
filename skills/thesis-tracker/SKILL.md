@@ -7,7 +7,7 @@ description: Create, update, and health-check investment theses. Triggers on "cr
 
 Core question: **"Is my original buy reason still valid?"**
 
-**Storage**: `data/artifacts/{TICKER}/thesis/` — JSON files + generated markdown report. Never write to PostgreSQL; read via MCP, write artifacts only. Persist reports via MCP `save_analysis_report`.
+**Storage**: `data/artifacts/{TICKER}/thesis/` — JSON files + generated markdown report. Never write to the database directly; read via REST API, write artifacts only. Persist reports via `POST /api/analysis/reports`.
 
 **CLI** — one entry point, five subcommands:
 ```bash
@@ -23,7 +23,7 @@ uv run python $THESIS report  {TICKER}                   # Regenerate markdown
 ## Prerequisite
 
 Verify financial data exists before creating a thesis:
-1. MCP `list_companies` / `get_company(ticker)` — confirm ticker is ingested
+1. `GET /api/companies/{TICKER}` — confirm ticker is ingested
 2. If missing: `uv run python -m pfs.etl.pipeline ingest {TICKER} --years 5`
 3. Optional: seed from `data/artifacts/{TICKER}/profile/` artifacts (`--from-profile`)
 
@@ -31,7 +31,7 @@ Verify financial data exists before creating a thesis:
 
 Ask the user for: Ticker, Position (long/short), Core thesis (falsifiable), 3-5 Buy reasons, 3-5 Assumptions (weighted, with KPI metrics), Sell conditions, Risk factors, optional Target/Stop-loss.
 
-**MCP tools**: `get_company`, `get_financial_metrics`, `get_income_statements(years=3)`
+**REST API endpoints**: `GET /api/companies/{TICKER}`, `GET /api/financials/{TICKER}/metrics`, `GET /api/financials/{TICKER}/income-statements?years=3`
 
 ```bash
 uv run python $THESIS create {TICKER} --interactive
@@ -59,10 +59,10 @@ uv run python $THESIS update {TICKER} --event "Q3 beat" --strength strengthened 
 
 **Composite Score** = Objective × 60% + Subjective × 40% (each 0-100). See `references/scoring-methodology.md`.
 
-- **Objective**: Weighted KPI scores from MCP data
+- **Objective**: Weighted KPI scores from REST API data
 - **Subjective**: LLM qualitative evaluation (CLI uses neutral 50 placeholder)
 
-**MCP tools**: `get_financial_metrics`, `get_income_statements(years=3)`, `get_prices(period="3mo")`
+**REST API endpoints**: `GET /api/financials/{TICKER}/metrics`, `GET /api/financials/{TICKER}/income-statements?years=3`, `GET /api/financials/{TICKER}/prices?period=3mo`
 
 ```bash
 uv run python $THESIS check {TICKER}
@@ -85,7 +85,7 @@ uv run python $THESIS catalyst {TICKER} --list
 
 ## Post-Task
 
-The CLI auto-regenerates `thesis_{TICKER}.md` after every subcommand. Then call MCP `save_analysis_report(ticker, 'thesis_tracker', title, content_md, file_path)` to persist.
+The CLI auto-regenerates `thesis_{TICKER}.md` after every subcommand. Then call `POST /api/analysis/reports` with `{ticker, report_type: 'thesis_tracker', title, content_md, file_path}` to persist.
 
 ## References
 

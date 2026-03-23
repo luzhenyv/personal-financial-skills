@@ -1,27 +1,26 @@
 # Personal Finance Assistant — Mini Bloomberg
 
-You are the **Intelligence Plane** of a personal equity research platform. You analyze US public companies by reading financial data through the MCP server and REST API, and producing analysis artifacts.
+You are the **Intelligence Plane** of a personal equity research platform. You analyze US public companies by reading financial data through the **REST API** and producing analysis artifacts.
 
 ## Architecture
 
 ```
-Plane 1 · DATA PLANE (Data Server — Mac Mini)
-  PostgreSQL (Docker) ← ETL + Prefect populate this (you never write to it)
-  REST API:  http://{DATA_SERVER}:8000
-  MCP HTTP:  http://{DATA_SERVER}:8001/mcp
+Plane 1 · DATA PLANE (SQLite on this server)
+  SQLite DB at /opt/pfs/data/personal_finance.db ← populated by ETL (you never write to it)
+  REST API:  http://100.106.13.112:8000
 
 Plane 2 · INTELLIGENCE PLANE (Agent Server — DMIT) ← YOU ARE HERE
-  Read via MCP/API → generate analysis → write artifacts
-  /opt/pfs/data/artifacts/{ticker}/ ← your output (git-tracked, synced to GitHub)
+  Read via REST API → generate analysis → write artifacts
+  /opt/pfs/data/artifacts/{ticker}/ ← your output (git-tracked)
 
 Plane 3 · PRESENTATION PLANE
-  Streamlit on Data Server ← renders artifacts
+  Streamlit → renders artifacts
 ```
 
 ## Hard Rules
 
-1. **Never write to PostgreSQL** — read through MCP tools or REST API only
-2. **Never trigger ETL** — if data is missing, report it and suggest: `cd /opt/pfs && uv run python -m pfs.etl.pipeline ingest {TICKER} --years 5`
+1. **Never write to the database** — read through REST API only
+2. **Never trigger ETL** — if data is missing, report it and suggest the user run ETL on their local machine
 3. **Write artifacts only** — output goes to `/opt/pfs/data/artifacts/{ticker}/`
 4. **Always commit-on-write** — after writing ANY artifact file(s), IMMEDIATELY run:
    ```bash
@@ -33,25 +32,77 @@ Plane 3 · PRESENTATION PLANE
    - `[thesis-tracker] MSFT: added catalyst — Azure AI revenue milestone`
 5. **Do NOT push** — push is handled by the artifact-commit timer or dispatcher
 
-## MCP Server
+## REST API — How to Fetch Data
 
-Access financial data through the MCP HTTP transport:
+**Base URL**: `http://100.106.13.112:8000`
 
-| Tool | Description |
-|------|-------------|
-| `list_companies()` | All ingested tickers |
-| `get_company(ticker)` | Full company details |
-| `get_income_statements(ticker, years, quarterly)` | Income data |
-| `get_balance_sheets(ticker, years, quarterly)` | Balance sheet data |
-| `get_cash_flows(ticker, years, quarterly)` | Cash flow data |
-| `get_financial_metrics(ticker)` | Margins, growth, returns, valuation |
-| `get_prices(ticker, period)` | Daily OHLCV |
-| `get_revenue_segments(ticker, fiscal_year)` | Segment breakdown |
-| `get_stock_splits(ticker)` | Stock split history |
-| `get_annual_financials(ticker, years)` | Combined financials with split-adjusted EPS |
-| `list_filings(ticker, form_type)` | SEC filing metadata |
-| `get_filing_content(ticker, filing_id)` | Raw filing HTML |
-| `save_analysis_report(ticker, report_type, title, content_md, file_path)` | Upsert report to DB |
+Use `curl -s` to fetch data. All responses are JSON. Add trailing `/` to avoid redirects.
+
+### Company endpoints
+```bash
+# List all ingested companies
+curl -s http://100.106.13.112:8000/api/companies/
+
+# Get one company's details
+curl -s http://100.106.13.112:8000/api/companies/{TICKER}
+```
+
+### Financial data endpoints
+```bash
+# Income statements (default 5 years annual; add ?quarterly=true for quarterly)
+curl -s "http://100.106.13.112:8000/api/financials/{TICKER}/income-statements"
+curl -s "http://100.106.13.112:8000/api/financials/{TICKER}/income-statements?years=3"
+
+# Balance sheets
+curl -s "http://100.106.13.112:8000/api/financials/{TICKER}/balance-sheets"
+
+# Cash flow statements
+curl -s "http://100.106.13.112:8000/api/financials/{TICKER}/cash-flows"
+
+# Financial metrics (margins, growth, returns, valuation)
+curl -s "http://100.106.13.112:8000/api/financials/{TICKER}/metrics"
+
+# Daily prices (default 1y; add ?period=5y for 5 years)
+curl -s "http://100.106.13.112:8000/api/financials/{TICKER}/prices"
+
+# Revenue segments
+curl -s "http://100.106.13.112:8000/api/financials/{TICKER}/segments"
+```
+
+### SEC filings endpoints
+```bash
+# List filings (optionally filter by form type)
+curl -s "http://100.106.13.112:8000/api/filings/{TICKER}/"
+curl -s "http://100.106.13.112:8000/api/filings/{TICKER}/?form_type=10-K"
+
+# Get filing content (raw HTML)
+curl -s "http://100.106.13.112:8000/api/filings/{TICKER}/{FILING_ID}/content"
+```
+
+### Analysis endpoints
+```bash
+# Pre-built profile data
+curl -s http://100.106.13.112:8000/api/analysis/profile/{TICKER}
+
+# Get current stock price
+curl -s http://100.106.13.112:8000/api/analysis/current-price/{TICKER}
+
+# Tearsheet
+curl -s http://100.106.13.112:8000/api/analysis/tearsheet/{TICKER}
+```
+
+### Python helper (for complex data fetching)
+
+For convenience, use the Python helper script to fetch multiple data types at once:
+```bash
+cd /opt/pfs && uv run python -c "
+import json, httpx
+API = 'http://100.106.13.112:8000'
+ticker = '{TICKER}'
+data = httpx.get(f'{API}/api/financials/{ticker}/income-statements').json()
+print(json.dumps(data, indent=2))
+"
+```
 
 ## Project Location
 
@@ -124,7 +175,7 @@ When you receive a cron message, follow these patterns:
 ## Data Source Priority
 
 ```
-MCP (PostgreSQL) > local SEC files > Alpha Vantage > yfinance > web search
+REST API (SQLite) > local SEC files > yfinance > web search
 ```
 
 ## Tracked Companies
