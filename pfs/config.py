@@ -10,6 +10,7 @@ class Settings(BaseSettings):
 
     # Database
     database_url: str = "postgresql://pfs:pfs_dev_2024@localhost:5432/personal_finance"
+    sqlite_database_path: Path = Path("./data/personal_finance.db")
 
     # SEC EDGAR
     sec_user_agent: str = "PersonalFinanceApp your_email@example.com"
@@ -28,6 +29,7 @@ class Settings(BaseSettings):
 
     # App
     log_level: str = "INFO"
+    cors_origins: str = "http://localhost:8501"
 
     model_config = {"env_file": ".env", "env_file_encoding": "utf-8", "extra": "ignore"}
 
@@ -55,6 +57,18 @@ class Settings(BaseSettings):
         """Create data directories if they don't exist."""
         for d in [self.raw_dir, self.artifacts_dir, self.reports_dir]:
             d.mkdir(parents=True, exist_ok=True)
+
+    @property
+    def is_sqlite(self) -> bool:
+        return self.database_url.startswith("sqlite")
+
+    @property
+    def is_postgresql(self) -> bool:
+        return self.database_url.startswith("postgresql")
+
+    @property
+    def allowed_cors_origins(self) -> list[str]:
+        return [origin.strip() for origin in self.cors_origins.split(",") if origin.strip()]
 
 
 settings = Settings()

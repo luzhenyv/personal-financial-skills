@@ -102,13 +102,32 @@ def next_task(db: Session = Depends(get_db)):
 @router.post("/{task_id}/claim")
 def claim_task(task_id: int, db: Session = Depends(get_db)):
     """Atomically SET status = 'running'. Returns 409 if already claimed."""
+    now = datetime.now(timezone.utc)
+    if db.bind is not None and db.bind.dialect.name == "sqlite":
+        updated = (
+            db.query(Task)
+            .filter(Task.id == task_id, Task.status == "pending")
+            .update({Task.status: "running", Task.started_at: now}, synchronize_session=False)
+        )
+        db.commit()
+        if updated:
+            task = db.query(Task).filter(Task.id == task_id).first()
+            if task is None:
+                raise HTTPException(status_code=404, detail="Task not found")
+            return task.to_dict()
+
+        task = db.query(Task).filter(Task.id == task_id).first()
+        if not task:
+            raise HTTPException(status_code=404, detail="Task not found")
+        raise HTTPException(status_code=409, detail=f"Task already {task.status}")
+
     task = db.query(Task).filter(Task.id == task_id).with_for_update().first()
     if not task:
         raise HTTPException(status_code=404, detail="Task not found")
     if task.status != "pending":
         raise HTTPException(status_code=409, detail=f"Task already {task.status}")
     task.status = "running"
-    task.started_at = datetime.now(timezone.utc)
+    task.started_at = now
     db.commit()
     db.refresh(task)
     return task.to_dict()

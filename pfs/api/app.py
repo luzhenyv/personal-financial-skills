@@ -4,13 +4,14 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from pfs.api.routers import companies, etl, filings, financials, analysis, tasks
+from pfs.config import settings
 
 app = FastAPI(title="Personal Finance API", version="1.0.0")
 
 # CORS — allow Streamlit dev server
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:8501"],
+    allow_origins=settings.allowed_cors_origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

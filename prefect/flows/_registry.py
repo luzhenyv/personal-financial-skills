@@ -6,6 +6,7 @@ from datetime import datetime, timezone
 
 from sqlalchemy import text as sa_text
 
+from pfs.db.compat import task_table_ref
 from pfs.db.session import get_session
 
 
@@ -14,10 +15,11 @@ def update_registry(skill: str, status: str, error_message: str | None = None):
     session = get_session()
     try:
         now = datetime.now(timezone.utc)
+        table_ref = task_table_ref()
         if status == "running":
             session.execute(
-                sa_text("""
-                    UPDATE agent_ops.tasks
+                sa_text(f"""
+                    UPDATE {table_ref}
                     SET status = 'running', started_at = :now
                     WHERE skill = :skill AND executor = 'prefect' AND type = 'recurring'
                 """),
@@ -25,8 +27,8 @@ def update_registry(skill: str, status: str, error_message: str | None = None):
             )
         elif status == "completed":
             session.execute(
-                sa_text("""
-                    UPDATE agent_ops.tasks
+                sa_text(f"""
+                    UPDATE {table_ref}
                     SET status = 'completed', completed_at = :now, last_run_at = :now,
                         error_message = NULL
                     WHERE skill = :skill AND executor = 'prefect' AND type = 'recurring'
@@ -35,8 +37,8 @@ def update_registry(skill: str, status: str, error_message: str | None = None):
             )
         elif status == "failed":
             session.execute(
-                sa_text("""
-                    UPDATE agent_ops.tasks
+                sa_text(f"""
+                    UPDATE {table_ref}
                     SET status = 'failed', completed_at = :now, error_message = :err
                     WHERE skill = :skill AND executor = 'prefect' AND type = 'recurring'
                 """),

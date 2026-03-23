@@ -15,8 +15,9 @@ from sqlalchemy import (
     Text,
     UniqueConstraint,
 )
-from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import DeclarativeBase, relationship
+
+from pfs.db.compat import CompatibleJSON
 
 
 class Base(DeclarativeBase):
@@ -90,7 +91,7 @@ class IncomeStatement(Base):
     shares_diluted = Column(BigInteger)
     # Source
     source = Column(String(50), default="sec_xbrl")
-    raw_json = Column(JSONB)
+    raw_json = Column(CompatibleJSON)
     created_at = Column(DateTime, default=datetime.utcnow)
 
     company = relationship("Company", back_populates="income_statements")
@@ -129,7 +130,7 @@ class BalanceSheet(Base):
     total_stockholders_equity = Column(BigInteger)
     # Source
     source = Column(String(50), default="sec_xbrl")
-    raw_json = Column(JSONB)
+    raw_json = Column(CompatibleJSON)
     created_at = Column(DateTime, default=datetime.utcnow)
 
     company = relationship("Company", back_populates="balance_sheets")
@@ -168,7 +169,7 @@ class CashFlowStatement(Base):
     free_cash_flow = Column(BigInteger)
     # Source
     source = Column(String(50), default="sec_xbrl")
-    raw_json = Column(JSONB)
+    raw_json = Column(CompatibleJSON)
     created_at = Column(DateTime, default=datetime.utcnow)
 
     company = relationship("Company", back_populates="cash_flow_statements")
@@ -191,7 +192,7 @@ class RevenueSegment(Base):
     revenue = Column(BigInteger)
     pct_of_total = Column(Numeric(8, 4))
     source = Column(String(50), default="sec_xbrl")
-    raw_json = Column(JSONB)
+    raw_json = Column(CompatibleJSON)
     created_at = Column(DateTime, default=datetime.utcnow)
 
     company = relationship("Company", back_populates="revenue_segments")
@@ -285,7 +286,7 @@ class AnalysisReport(Base):
     report_type = Column(String(50), nullable=False)
     title = Column(String(255))
     content_md = Column(Text)
-    parameters = Column(JSONB)
+    parameters = Column(CompatibleJSON)
     generated_by = Column(String(50))
     file_path = Column(String(500))
     created_at = Column(DateTime, default=datetime.utcnow)
@@ -344,5 +345,5 @@ class EtlRun(Base):
     sec_filings = Column(Integer, default=0)
     filings_downloaded = Column(Integer, default=0)
     stock_splits = Column(Integer, default=0)
-    errors = Column(JSONB, default=list)
-    run_metadata = Column("metadata", JSONB, default=dict)
+    errors = Column(CompatibleJSON, default=list)
+    run_metadata = Column("metadata", CompatibleJSON, default=dict)

@@ -5,14 +5,14 @@ from __future__ import annotations
 from datetime import datetime, timezone
 
 from sqlalchemy import Boolean, CheckConstraint, Column, DateTime, Integer, String, Text
-from sqlalchemy.dialects.postgresql import JSONB
 
+from pfs.db.compat import CompatibleJSON, task_table_args
 from pfs.db.models import Base
 
 
 class Task(Base):
     __tablename__ = "tasks"
-    __table_args__ = (
+    __table_args__ = task_table_args(
         CheckConstraint(
             "type IN ('immediate','scheduled','recurring','event_triggered')",
             name="ck_tasks_type",
@@ -26,7 +26,6 @@ class Task(Base):
             name="ck_tasks_status",
         ),
         CheckConstraint("priority BETWEEN 1 AND 9", name="ck_tasks_priority"),
-        {"schema": "agent_ops"},
     )
 
     id = Column(Integer, primary_key=True)
@@ -36,7 +35,7 @@ class Task(Base):
     skill = Column(String(50), nullable=False)
     action = Column(String(50))
     ticker = Column(String(10))
-    params = Column(JSONB, default=dict)
+    params = Column(CompatibleJSON, default=dict)
 
     # Who runs this task
     executor = Column(String(20), nullable=False, default="dispatcher")
@@ -66,7 +65,7 @@ class Task(Base):
     # Results
     result_summary = Column(Text)
     error_message = Column(Text)
-    artifacts = Column(JSONB, default=list)
+    artifacts = Column(CompatibleJSON, default=list)
     git_commit_sha = Column(String(40))
 
     def to_dict(self) -> dict:
