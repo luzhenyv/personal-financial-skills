@@ -16,8 +16,13 @@ echo "=== Syncing Python dependencies ==="
 # uv.lock is gitignored — plain sync generates a local lockfile
 uv sync
 
-echo "=== Updating OpenClaw CLAUDE.md ==="
+echo "=== Updating OpenClaw workspace ==="
 cp "$PROJECT_DIR/agents/openclaw/CLAUDE.md" /root/.openclaw/workspace/CLAUDE.md
+# Sync skills (copies, not symlinks — OpenClaw rejects out-of-workspace symlinks)
+for skill in company-profile thesis-tracker etl-coverage; do
+	rm -rf "/root/.openclaw/workspace/skills/$skill"
+	cp -r "$PROJECT_DIR/skills/$skill" "/root/.openclaw/workspace/skills/$skill"
+done
 
 echo "=== Restarting services ==="
 for service in pfs-api pfs-mcp pfs-prefect pfs-prefect-worker pfs-streamlit pfs-task-dispatcher; do

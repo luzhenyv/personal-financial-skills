@@ -1,4 +1,3 @@
-```skill
 ---
 name: thesis-tracker
 description: Create, update, and health-check investment theses. Triggers on "create thesis for [ticker]", "update thesis for [ticker]", "thesis health check [ticker]", "is my thesis still intact", "catalyst check [ticker]", or "review my positions".

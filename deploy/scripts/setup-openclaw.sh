@@ -9,12 +9,21 @@ OC_SKILLS="$OC_WORKSPACE/skills"
 
 echo "=== Setting up OpenClaw workspace for Mini Bloomberg ==="
 
-# 1. Symlink project skills into OpenClaw workspace
-echo "Symlinking project skills..."
+# 1. Copy project skills into OpenClaw workspace
+# NOTE: OpenClaw rejects symlinks that resolve outside the workspace root,
+# so we copy instead of symlink. Re-run this script (or deploy.sh) to sync.
+echo "Copying project skills..."
 mkdir -p "$OC_SKILLS"
-ln -sfn "$PROJECT_DIR/skills/company-profile" "$OC_SKILLS/company-profile"
-ln -sfn "$PROJECT_DIR/skills/thesis-tracker"  "$OC_SKILLS/thesis-tracker"
-ln -sfn "$PROJECT_DIR/skills/etl-coverage"    "$OC_SKILLS/etl-coverage"
+for skill in company-profile thesis-tracker etl-coverage; do
+    rm -rf "${OC_SKILLS:?}/$skill"
+    cp -r "$PROJECT_DIR/skills/$skill" "$OC_SKILLS/$skill"
+done
+
+# 2. Ensure uv is in system PATH for OpenClaw exec
+if [[ -x "$HOME/.local/bin/uv" ]] && [[ ! -x "/usr/local/bin/uv" ]]; then
+    ln -sf "$HOME/.local/bin/uv" /usr/local/bin/uv
+    echo "Symlinked uv to /usr/local/bin/uv"
+fi
 
 # 3. Install CLAUDE.md (agent persona)
 echo "Installing CLAUDE.md..."
