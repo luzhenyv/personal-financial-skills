@@ -154,6 +154,9 @@ echo ""
 echo "=== [6/7] Installing systemd services ==="
 chmod +x deploy/scripts/*.sh
 
+mkdir -p /root/.prefect
+mkdir -p /opt/pfs/.venv/lib/python3.12/site-packages/prefect/server/ui_build
+
 cp deploy/systemd/pfs-streamlit.service /etc/systemd/system/
 cp deploy/systemd/pfs-task-dispatcher.service /etc/systemd/system/
 

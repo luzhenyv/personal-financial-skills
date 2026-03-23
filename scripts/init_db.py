@@ -9,6 +9,7 @@ from sqlalchemy import text
 from pfs.config import settings
 from pfs.db.models import Base
 from pfs.db.session import engine
+from pfs.tasks.models import Task  # noqa: F401
 
 
 def init_db() -> None:
