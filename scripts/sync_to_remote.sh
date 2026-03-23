@@ -153,7 +153,7 @@ restart_remote_services() {
 
     # Use nohup + disown so the restart survives SSH disconnect
     ssh -o ServerAliveInterval=5 -o ServerAliveCountMax=3 "$REMOTE_HOST" \
-        'for svc in pfs-api pfs-streamlit pfs-mcp; do
+        'for svc in pfs-api pfs-streamlit; do
             if systemctl is-active --quiet "$svc" 2>/dev/null; then
                 sudo systemctl restart "$svc" && echo "  Restarted $svc"
             fi
