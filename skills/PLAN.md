@@ -4,6 +4,37 @@
 
 ---
 
+## Core Architecture Decisions
+
+### 1. No MCP — Direct REST API Only
+
+Skills access all data through the FastAPI REST API (`$PFS_API_URL`). No MCP tools, no MCP helpers. Scripts call endpoints directly via `httpx` or `curl`. This keeps skills simple and portable.
+
+### 2. No Shared `_lib/` Directory
+
+Each skill is a **self-contained agent skill** following the [Claude agent skill project structure](https://platform.claude.com/docs/en/agents-and-tools/agent-skills/overview). There is no `skills/_lib/` shared library. Every script a skill needs lives inside its own `<skill>/scripts/` folder.
+
+- Duplicating small utility functions across skills is acceptable and preferred over cross-skill imports
+- If a utility becomes important, high-frequency, or performance-critical, **promote it to a FastAPI server endpoint** rather than sharing it via `_lib/`
+- Skills never import from other skills or from a shared skill library
+
+### 3. Heavy Work → FastAPI Server; Light Work → Skill Scripts
+
+The FastAPI server runs on a high-performance server and owns all heavy computation:
+
+| Belongs in **FastAPI server** | Belongs in **skill scripts** |
+|-------------------------------|------------------------------|
+| Financial calculations (DCF, comps, risk metrics) | Reading API responses, writing artifact JSON/Markdown |
+| Database queries and joins | CLI argument parsing |
+| Price fetching and batch operations | Prompt templates and AI interaction |
+| Stock screening and filtering | Artifact file I/O (simple JSON read/write) |
+| Portfolio valuation and P&L computation | Report formatting (Markdown assembly) |
+| Correlation and beta calculations | Calling `POST /api/analysis/reports` to persist |
+
+Skills stay thin: fetch data from API → let AI analyze → write artifacts.
+
+---
+
 ## Current Skill Inventory
 
 | # | Skill | Path | Status | Origin |
@@ -16,6 +47,18 @@
 
 ## Part 1: Refactoring Existing Skills
 
+### 1.0 Delete `skills/_lib/` — Migrate to Per-Skill Scripts + API
+
+The `skills/_lib/` directory violates agent skill project structure. Each file must be migrated:
+
+| Current `_lib/` file | Migration plan | Priority |
+|----------------------|----------------|----------|
+| `mcp_helpers.py` | **Delete.** All functions are thin REST API wrappers. Skills call the API directly via `httpx` | P0 |
+| `api_client.py` | **Promote to API.** Functions like `get_profile()`, `get_valuation()`, `get_coverage()` already call FastAPI endpoints. Skills call those endpoints directly. Delete this file | P0 |
+| `artifact_io.py` | **Copy into each skill** that needs it (company-profile, thesis-tracker). It's lightweight file I/O — ~80 lines. Each skill gets its own copy in `<skill>/scripts/artifact_io.py` | P0 |
+| `thesis_io.py` | **Move to `thesis-tracker/scripts/thesis_io.py`**. Only thesis-tracker uses it. If portfolio-manager needs to read thesis files, it reads the JSON directly | P0 |
+| `task_client.py` | **Move to `agents/task_client.py`**. Used by the task dispatcher agent, not by skills | P0 |
+
 ### 1.1 company-profile — Moderate Refactor
 
 The skill works but has structural gaps that will compound as we add more skills that depend on profile data.
@@ -23,10 +66,11 @@ The skill works but has structural gaps that will compound as we add more skills
 | Issue | What to do | Priority |
 |-------|-----------|----------|
 | **Task 1 is fully AI-driven** | Extract 10-K parsing into a reusable script (`scripts/extract_10k.py`). Keep AI interpretation for narrative fields, but structured field extraction (revenue segments, executives) should be deterministic | P1 |
-| **No valuation section** | Add DCF summary to profile output by calling `GET /api/analysis/valuation/{ticker}`. The equity-research `initiating-coverage` Task 3 is a good reference. Profile should include fair value estimate | P2 |
-| **Comps depend on yfinance live calls** | `build_comps.py` calls yfinance at runtime. Add caching layer — write `comps_cache.json` with TTL. Comps data changes slowly; no need to re-fetch every run | P2 |
+| **No valuation section** | Add DCF summary to profile output by calling `GET /api/analysis/valuation/{ticker}`. Profile should include fair value estimate | P2 |
+| **Comps depend on yfinance live calls** | Move comps computation to FastAPI: `GET /api/analysis/comps/{ticker}`. The server handles yfinance calls, caching, and TTL. `build_comps.py` becomes a thin script that calls the API endpoint | P1 |
 | **No markdown-to-DB persistence for Task 1** | Task 3 posts report to DB, but Task 1 JSON artifacts are only local. Add `POST /api/analysis/reports` call after Task 1 to persist structured data too | P3 |
 | **Config triggers are passive** | `config.yaml` defines 10-K trigger, but no active listener. Wire into task dispatcher event matching | P2 |
+| **Remove MCP references** | Update `config.yaml`: replace `mcp_tools` with `api_endpoints`. Update `generate_report.py` comments to say "REST API" not "MCP" | P0 |
 
 ### 1.2 thesis-tracker — Light Refactor
 
@@ -34,24 +78,20 @@ The best-structured skill. Minimal changes needed, mostly extensions.
 
 | Issue | What to do | Priority |
 |-------|-----------|----------|
+| **Inline `thesis_io.py`** | Move `skills/_lib/thesis_io.py` → `skills/thesis-tracker/scripts/thesis_io.py`. Update imports in `thesis_cli.py` | P0 |
+| **Inline `artifact_io.py`** | Copy `skills/_lib/artifact_io.py` → `skills/thesis-tracker/scripts/artifact_io.py` if used | P0 |
 | **Assumption weights not validated** | Add validation in `thesis_cli.py create` that weights sum to 1.0 (or auto-normalize) | P1 |
 | **Subjective score always 50 in CLI** | Design a structured prompt template for the agent to produce real subjective scores. Store the prompt in `references/health-check-prompt.md` | P1 |
 | **Catalyst resolution doesn't auto-trigger update** | When resolving a catalyst via `catalyst --resolve`, auto-prompt for update flow (or create a task in the queue) | P2 |
 | **No portfolio integration point** | Add `position_size`, `entry_price`, `current_pnl` fields to `thesis.json` (optional fields). The upcoming portfolio skill will populate these | P2 |
 | **Health check `--all` has no summary view** | Generate a portfolio-wide health summary markdown when running `check --all` | P2 |
+| **Remove MCP references** | Update `config.yaml`: replace `mcp_tools` with `api_endpoints` | P0 |
 
-### 1.3 etl-coverage — No Refactor Needed
-
-Working as designed. Low coupling, clear single purpose.
-
-### 1.4 Shared Library (_lib/) — Moderate Refactor
+### 1.3 etl-coverage — Light Refactor
 
 | Issue | What to do | Priority |
 |-------|-----------|----------|
-| **No portfolio_io.py** | Create `skills/_lib/portfolio_io.py` for position and portfolio artifact I/O (mirrors `thesis_io.py` pattern) | P1 |
-| **api_client.py is thin** | Expand to cover all REST endpoints needed by new skills (prices with date range, multiple tickers batch, etc.) | P1 |
-| **No shared formatting utils** | Extract number formatting (`fmt_b`, `fmt_pct`, etc.) from `generate_report.py` into `_lib/format_utils.py` | P3 |
-| **No date/time helpers** | Add fiscal quarter detection, earnings date lookup, TTM period calculation | P2 |
+| **Remove MCP references** | Update `config.yaml`: replace `mcp_tools` with `api_endpoints` | P0 |
 
 ---
 
@@ -59,22 +99,44 @@ Working as designed. Low coupling, clear single purpose.
 
 ### Skill Map (Full Vision)
 
+Each skill is self-contained: `SKILL.md` + `config.yaml` + `scripts/` + `references/`. No shared `_lib/`. Heavy computation lives in the FastAPI server as API endpoints.
+
 ```
 skills/
-  _lib/                          # Shared utilities (no pfs.* imports)
-  ├── api_client.py              # REST API wrapper        ✅ exists
-  ├── artifact_io.py             # Versioned artifact I/O  ✅ exists
-  ├── thesis_io.py               # Thesis file operations  ✅ exists
-  ├── portfolio_io.py            # Portfolio file ops      🆕 Phase 2
-  ├── format_utils.py            # Number formatting       🆕 Phase 1
-  ├── task_client.py             # Task queue client       ✅ exists
-  └── mcp_helpers.py             # Data fetching           ✅ exists
-  
   company-profile/               # Company tearsheet       ✅ exists
+  ├── SKILL.md
+  ├── config.yaml
+  ├── scripts/
+  │   ├── artifact_io.py         # Local copy — JSON/Markdown I/O
+  │   ├── build_comps.py         # Thin: calls GET /api/analysis/comps/{ticker}
+  │   ├── extract_10k.py         # 10-K section parsing
+  │   └── generate_report.py     # Markdown report assembly
+  └── references/
+
   thesis-tracker/                # Investment thesis CRUD  ✅ exists
+  ├── SKILL.md
+  ├── config.yaml
+  ├── scripts/
+  │   ├── artifact_io.py         # Local copy
+  │   ├── thesis_io.py           # Thesis file ops (moved from _lib/)
+  │   └── thesis_cli.py          # CLI: create/update/check/catalyst/report
+  └── references/
+
   etl-coverage/                  # Data quality audit      ✅ exists
+  ├── SKILL.md
+  ├── config.yaml
+  └── scripts/
+      └── check_coverage.py      # Calls GET /api/analysis/coverage/{ticker}
 
   portfolio-manager/             # 🆕 Phase 2 — Position & P&L tracking
+  ├── SKILL.md
+  ├── config.yaml
+  ├── scripts/
+  │   ├── artifact_io.py         # Local copy
+  │   ├── portfolio_io.py        # Portfolio file ops (local to this skill)
+  │   └── portfolio_cli.py       # CLI: buy/sell/snapshot/allocation/report
+  └── references/
+
   earnings-analysis/             # 🆕 Phase 3 — Post-earnings reports
   earnings-preview/              # 🆕 Phase 3 — Pre-earnings scenarios
   risk-manager/                  # 🆕 Phase 3 — Portfolio risk metrics
@@ -191,16 +253,17 @@ uv run python skills/portfolio-manager/scripts/portfolio_cli.py report
 ```
 User logs trade → transactions.json (append) → portfolio.json (recalculated)
                                               → snapshot/{date}.json (daily)
-REST API prices → portfolio_cli.py snapshot   → portfolio.json (prices updated)
-thesis_io.py    → portfolio.json              → thesis_health_score per position
+GET /api/prices/batch       → portfolio_cli.py snapshot → portfolio.json (prices updated)
+GET /api/portfolio/valuate  → portfolio.json            → total P&L computed server-side
+Reads thesis.json artifacts → portfolio.json            → thesis_health_score per position
 ```
 
 **Cross-skill integration:**
-- **Reads from thesis-tracker** — thesis status and health score per position
-- **Reads from REST API** — current prices for portfolio valuation
-- **Read by risk-manager** — portfolio-level risk analysis
-- **Read by morning-briefing** — daily P&L summary
-- **Read by fund-manager** — portfolio state for decision-making
+- **Reads from thesis-tracker** — reads `data/artifacts/{ticker}/thesis/thesis.json` directly for thesis status and health score
+- **Calls REST API** — `GET /api/prices/batch`, `GET /api/portfolio/valuate` for current prices and P&L
+- **Read by risk-manager** — reads `data/artifacts/_portfolio/portfolio.json`
+- **Read by morning-briefing** — reads portfolio artifacts for daily P&L summary
+- **Read by fund-manager** — reads portfolio state for decision-making
 
 **Streamlit page:** New `pages/4_portfolio.py` — positions table, allocation pie chart, P&L waterfall, performance vs. benchmark
 
@@ -236,13 +299,16 @@ data/artifacts/{ticker}/earnings/
 - Thesis impact assessment is built-in (equity-research doesn't have thesis integration)
 - Auto-triggers thesis-tracker update when analysis completes
 
-**REST API endpoints needed:**
+**REST API endpoints used:**
 - `GET /api/filings/{ticker}/?form_type=10-Q` — latest quarterly filing
 - `GET /api/financials/{ticker}/income-statements?years=2` — compare QoQ / YoY
 - `GET /api/financials/{ticker}/metrics` — margin trends
+- `GET /api/financials/{ticker}/quarterly?quarters=8` — quarterly breakdown *(new endpoint)*
 
-**New REST API endpoints to build:**
-- `GET /api/financials/{ticker}/quarterly?quarters=8` — quarterly breakdown (not just annual)
+**Skill scripts (thin, API-driven):**
+- `scripts/collect_earnings.py` — calls REST API endpoints, writes raw JSON to artifacts
+- `scripts/generate_earnings_report.py` — assembles Markdown from JSON artifacts + AI analysis
+- `scripts/artifact_io.py` — local copy of JSON/Markdown I/O helpers
 
 **Trigger:** Task dispatcher creates earnings-analysis task when new 10-Q detected by Prefect `filing_check` flow.
 
@@ -327,10 +393,18 @@ uv run python skills/risk-manager/scripts/risk_cli.py rules             # Show/e
 uv run python skills/risk-manager/scripts/risk_cli.py report            # Generate markdown report
 ```
 
-**Cross-skill reads:**
-- portfolio-manager — positions, allocation
-- thesis-tracker — health scores per position
-- REST API — prices for beta/correlation calculation
+**REST API endpoints used:**
+- `GET /api/analysis/risk/portfolio` — server computes beta, correlation, VaR, drawdown *(new endpoint)*
+- `GET /api/analysis/risk/{ticker}` — per-ticker risk metrics *(new endpoint)*
+- `GET /api/prices/batch?tickers=X,Y,Z` — batch prices for correlation *(new endpoint)*
+
+**Skill scripts (thin):**
+- `scripts/risk_cli.py` — calls risk API endpoints, reads portfolio/thesis artifacts, writes risk report
+- `scripts/artifact_io.py` — local copy of JSON/Markdown I/O helpers
+
+**Cross-skill reads (artifacts only, no imports):**
+- `data/artifacts/_portfolio/portfolio.json` — positions, allocation
+- `data/artifacts/{ticker}/thesis/thesis.json` — health scores per position
 
 #### 3.4 morning-briefing (P2)
 
@@ -373,8 +447,8 @@ uv run python skills/risk-manager/scripts/risk_cli.py report            # Genera
 
 **Workflow:**
 1. Define screen criteria (value, growth, quality, special situation)
-2. Query REST API across all ingested companies
-3. Rank and filter by criteria
+2. Call `GET /api/analysis/screen` with filter parameters — server does the heavy DB queries
+3. Rank and filter results
 4. Generate one-pager per idea candidate
 5. Flag top ideas for full company-profile workflow
 
@@ -384,6 +458,11 @@ uv run python skills/risk-manager/scripts/risk_cli.py report            # Genera
 uv run python skills/idea-generation/scripts/screen.py --type growth --min-revenue-growth 0.20
 uv run python skills/idea-generation/scripts/screen.py --type value --max-pe 15 --min-fcf-yield 0.05
 ```
+
+**REST API endpoints used:**
+- `GET /api/analysis/screen?type=growth&min_revenue_growth=0.20` — parameterized screening *(new endpoint)*
+- `GET /api/companies/` — list all ingested companies
+- `GET /api/financials/{ticker}/metrics` — per-ticker fundamentals
 
 #### 4.2 sector-overview (P3)
 
@@ -483,21 +562,29 @@ data/artifacts/_knowledge/
 ### Phase 2: Portfolio Management (Target: April 2025)
 
 ```
-Week 1-2:
+Week 1:
+  ☐ Delete skills/_lib/ — migrate files per Section 1.0
+  ☐ Move thesis_io.py → thesis-tracker/scripts/thesis_io.py, update imports
+  ☐ Copy artifact_io.py into company-profile/scripts/ and thesis-tracker/scripts/
+  ☐ Move task_client.py → agents/task_client.py
+  ☐ Delete mcp_helpers.py and api_client.py (skills call API directly)
+  ☐ Update config.yaml in all 3 existing skills: mcp_tools → api_endpoints
+  ☐ Build new FastAPI endpoints: comps, batch prices, portfolio valuate
+
+Week 2:
   ☐ Refactor thesis-tracker (weight validation, subjective scoring template)
-  ☐ Create skills/_lib/portfolio_io.py
-  ☐ Create skills/_lib/format_utils.py  
-  ☐ Build portfolio-manager skill (CLI + artifacts)
+  ☐ Build portfolio-manager skill (CLI + artifacts + portfolio_io.py local)
   ☐ Add portfolio.json + transactions.json schemas
 
 Week 3:
   ☐ Build Streamlit portfolio page (positions table, allocation chart, P&L)
-  ☐ Wire portfolio-manager to thesis-tracker (thesis health per position)
+  ☐ Wire portfolio-manager to thesis-tracker (reads thesis.json artifacts)
   ☐ Build portfolio snapshot automation (Prefect flow, daily after market close)
 
 Week 4:
   ☐ Build risk-manager skill (risk metrics, alerts, rules)
-  ☐ Wire risk-manager to portfolio-manager
+  ☐ Build new FastAPI endpoints: risk/portfolio, risk/{ticker}
+  ☐ Wire risk-manager to portfolio-manager (reads portfolio artifacts)
   ☐ Add risk section to Streamlit dashboard
 ```
 
@@ -505,13 +592,14 @@ Week 4:
 
 ```
 Month 1 (May):
-  ☐ Build earnings-analysis skill (4-task workflow)
-  ☐ Add quarterly financials endpoint to REST API
-  ☐ Wire earnings-analysis → thesis-tracker auto-update
+  ☐ Build FastAPI endpoint: GET /api/financials/{ticker}/quarterly
+  ☐ Build earnings-analysis skill (4-task workflow, thin scripts calling API)
+  ☐ Wire earnings-analysis → thesis-tracker auto-update (reads/writes thesis artifacts)
   ☐ Build earnings-preview skill (3-task workflow)
   ☐ Build morning-briefing skill
 
 Month 2 (June):
+  ☐ Build FastAPI endpoints: risk/{ticker}, risk/portfolio, correlation-matrix
   ☐ Wire Prefect filing_check → auto-trigger earnings-analysis
   ☐ Wire earnings date calendar → auto-trigger earnings-preview
   ☐ Build catalyst-calendar skill (cross-portfolio aggregation)
@@ -521,35 +609,73 @@ Month 2 (June):
 ### Phase 4: Multi-Agent Intelligence (Target: Q3 2025)
 
 ```
-  ☐ Build idea-generation skill (screening pipeline)
+  ☐ Build FastAPI endpoints: screen, catalysts/upcoming
+  ☐ Build idea-generation skill (thin screening script calling GET /api/analysis/screen)
   ☐ Build sector-overview skill
   ☐ Build model-update skill
-  ☐ Build fund-manager skill (multi-signal synthesis)
+  ☐ Build fund-manager skill (multi-signal synthesis, reads all skill artifacts)
   ☐ Design agent debate protocol (fund-manager reads all analyst artifacts)
 ```
 
 ### Phase 5: Knowledge Platform (Target: Q4 2025)
 
 ```
-  ☐ Build knowledge-base skill (PDF ingestion, structured extraction)
+  ☐ Build FastAPI endpoint: POST /api/knowledge/ingest
+  ☐ Build knowledge-base skill (PDF ingestion via API, structured extraction)
   ☐ Build cross-reference engine (knowledge → thesis → morning briefing)
   ☐ Design research report templates for external consumption
 ```
 
 ---
 
-## Part 4: API Extensions Needed
+## Part 4: FastAPI Server Endpoint Plan
 
-New REST API endpoints required to support upcoming skills:
+The FastAPI server is the **computation and data hub**. Skills are thin clients that call these endpoints. When a skill needs heavy work done, we build an endpoint — not a shared library.
 
-| Endpoint | Needed by | Purpose |
-|----------|-----------|---------|
-| `GET /api/financials/{ticker}/quarterly?quarters=8` | earnings-analysis | Quarterly breakdown for QoQ comparison |
-| `GET /api/financials/{ticker}/estimates` | earnings-preview | Consensus estimates (if we ingest them) |
-| `GET /api/prices/batch?tickers=X,Y,Z` | portfolio-manager | Batch price fetch for portfolio valuation |
-| `GET /api/analysis/risk/{ticker}` | risk-manager | Beta, correlation, volatility for a ticker |
-| `GET /api/analysis/screen` | idea-generation | Parameterized multi-company screening |
-| `POST /api/knowledge/ingest` | knowledge-base | Document ingestion endpoint |
+### Existing Endpoints
+
+| Endpoint | Used by |
+|----------|---------|
+| `GET /api/companies/` | all skills |
+| `GET /api/companies/{ticker}` | company-profile, thesis-tracker |
+| `GET /api/financials/{ticker}/income-statements?years=5` | company-profile, earnings-analysis |
+| `GET /api/financials/{ticker}/balance-sheets?years=5` | company-profile |
+| `GET /api/financials/{ticker}/cash-flows?years=5` | company-profile |
+| `GET /api/financials/{ticker}/metrics` | thesis-tracker, earnings-analysis, idea-generation |
+| `GET /api/financials/{ticker}/prices?period=1y` | company-profile |
+| `GET /api/financials/{ticker}/segments` | company-profile |
+| `GET /api/financials/{ticker}/stock-splits` | company-profile |
+| `GET /api/financials/{ticker}/annual?years=5` | company-profile |
+| `GET /api/filings/{ticker}/` | earnings-analysis |
+| `GET /api/filings/{ticker}/{id}/content` | earnings-analysis |
+| `GET /api/analysis/profile/{ticker}` | company-profile |
+| `GET /api/analysis/valuation/{ticker}` | company-profile |
+| `GET /api/analysis/coverage/{ticker}` | etl-coverage |
+| `GET /api/analysis/current-price/{ticker}` | portfolio-manager |
+| `POST /api/analysis/reports` | all skills (persist to DB) |
+
+### New Endpoints to Build
+
+| Endpoint | Phase | Needed by | Purpose |
+|----------|-------|-----------|---------|
+| **`GET /api/analysis/comps/{ticker}`** | 2 | company-profile | Server-side comps with yfinance + caching + TTL. Replaces local `build_comps.py` heavy lifting |
+| **`GET /api/prices/batch?tickers=X,Y,Z`** | 2 | portfolio-manager, risk-manager | Batch current price fetch for portfolio valuation. Single call instead of N individual requests |
+| **`POST /api/portfolio/valuate`** | 2 | portfolio-manager | Accept positions JSON, return market values + P&L + allocation breakdown. Heavy math on server |
+| **`GET /api/financials/{ticker}/quarterly?quarters=8`** | 3 | earnings-analysis | Quarterly income/balance/cash flow breakdown for QoQ comparison |
+| **`GET /api/analysis/risk/{ticker}`** | 3 | risk-manager | Per-ticker beta, volatility, correlation vs benchmark. Computed from price history on server |
+| **`POST /api/analysis/risk/portfolio`** | 3 | risk-manager | Accept portfolio positions, return portfolio-level beta, VaR, max drawdown, sector concentration |
+| **`GET /api/analysis/screen`** | 4 | idea-generation | Parameterized stock screening across all companies: revenue growth, PE, FCF yield, margins, etc. |
+| **`GET /api/analysis/correlation-matrix?tickers=X,Y,Z`** | 3 | risk-manager, fund-manager | Pairwise correlation matrix from price data |
+| **`GET /api/catalysts/upcoming?days=30`** | 4 | catalyst-calendar, morning-briefing | Aggregated catalyst events across all tracked tickers |
+| **`POST /api/knowledge/ingest`** | 5 | knowledge-base | Document ingestion and structured extraction |
+
+### Design Principles for New Endpoints
+
+1. **Compute-heavy → server endpoint** — If it needs price data, DB joins, or math beyond simple arithmetic, it's an endpoint
+2. **Cacheable** — Comps, risk metrics, screening results should include server-side caching with TTL
+3. **Batch-friendly** — Multi-ticker operations in a single request to reduce round trips
+4. **JSON in, JSON out** — Consistent schema with `schema_version` where appropriate
+5. **Stateless** — Endpoints compute from current DB state, no session tracking
 
 ---
 
@@ -564,9 +690,11 @@ These rules govern how ALL skills are built, current and future:
 5. **Append-only for history** — Updates, health checks, transactions, decisions: always append, never overwrite
 6. **CLI mirrors agent capability** — Everything the agent can do, a human can do via CLI
 7. **Config-driven triggers** — `config.yaml` defines what events activate the skill. The task dispatcher reads these
-8. **_lib/ for shared code** — No `pfs.*` imports in skills. All shared utilities live in `skills/_lib/`
-9. **References folder for prompts** — Structured AI prompts live in `references/` not hardcoded in scripts
-10. **POST to DB after artifact write** — Call `POST /api/analysis/reports` to persist reports for dashboard access
+8. **Self-contained skills** — Each skill's scripts live in `<skill>/scripts/`. No shared `_lib/` directory. Duplicating small utilities across skills is preferred over cross-skill imports
+9. **Heavy work → FastAPI server** — If a computation is performance-critical, shared across skills, or needs DB access, it belongs as a server endpoint. Skill scripts stay thin (call API → AI analysis → write artifacts)
+10. **Direct REST API access** — Skills call the FastAPI server via `httpx`/`curl`. No MCP, no wrapper libraries, no intermediary abstractions
+11. **References folder for prompts** — Structured AI prompts live in `references/` not hardcoded in scripts
+12. **POST to DB after artifact write** — Call `POST /api/analysis/reports` to persist reports for dashboard access
 
 ---
 
