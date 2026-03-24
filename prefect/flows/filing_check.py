@@ -13,9 +13,6 @@ import subprocess
 import sys
 
 from prefect import flow, task
-from prefect.schedules import CronSchedule
-
-from prefect.flows._registry import update_registry
 
 
 @task(retries=2, retry_delay_seconds=180)
@@ -69,13 +66,10 @@ def queue_analysis_tasks(filings_output: str):
 @flow(name="filing-check")
 def filing_check():
     """Check SEC EDGAR for new filings, queue analysis tasks."""
-    update_registry("filing-check", "running")
     try:
         output = check_new_filings()
         queue_analysis_tasks(output)
-        update_registry("filing-check", "completed")
     except Exception as e:
-        update_registry("filing-check", "failed", error_message=str(e))
         raise
 
 

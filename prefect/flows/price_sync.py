@@ -10,9 +10,6 @@ import subprocess
 import sys
 
 from prefect import flow, task
-from prefect.schedules import CronSchedule
-
-from prefect.flows._registry import update_registry
 
 
 @task(retries=3, retry_delay_seconds=300)
@@ -31,13 +28,10 @@ def run_etl_sync():
 @flow(name="price-sync")
 def price_sync():
     """Sync daily prices for all tracked tickers."""
-    update_registry("price-sync", "running")
     try:
         output = run_etl_sync()
-        update_registry("price-sync", "completed")
         return output
     except Exception as e:
-        update_registry("price-sync", "failed", error_message=str(e))
         raise
 
 

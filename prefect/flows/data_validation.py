@@ -12,8 +12,6 @@ from datetime import date, timedelta
 
 from prefect import flow, task
 
-from prefect.flows._registry import update_registry
-
 
 @task
 def check_price_gaps() -> list[str]:
@@ -102,16 +100,13 @@ def queue_anomaly_tasks(anomalies: list[str]):
 @flow(name="data-validation")
 def data_validation():
     """Run DB integrity checks and flag anomalies."""
-    update_registry("data-validation", "running")
     try:
         price_gaps = check_price_gaps()
         rev_issues = check_revenue_consistency()
         all_anomalies = [f"{t} price-gap" for t in price_gaps] + rev_issues
         queue_anomaly_tasks(all_anomalies)
-        update_registry("data-validation", "completed")
         return {"price_gaps": price_gaps, "revenue_issues": rev_issues}
     except Exception as e:
-        update_registry("data-validation", "failed", error_message=str(e))
         raise
 
 
