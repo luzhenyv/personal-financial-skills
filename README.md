@@ -265,6 +265,7 @@ See [`docs/api.md`](docs/api.md) for full documentation.
 | [`docs/api.md`](docs/api.md) | API endpoint reference |
 | [`docs/artifact-schema.md`](docs/artifact-schema.md) | JSON schema for each artifact type |
 | [`docs/migration-plan.md`](docs/migration-plan.md) | Two-server migration plan + skill-platform boundary |
+| [`docs/prefect-local-orchestration.md`](docs/prefect-local-orchestration.md) | Local Prefect orchestration guide |
 
 ---
 
