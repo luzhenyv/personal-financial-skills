@@ -128,13 +128,12 @@ skills/
   └── scripts/
       └── check_coverage.py      # Calls GET /api/analysis/coverage/{ticker}
 
-  portfolio-manager/             # 🆕 Phase 2 — Position & P&L tracking
+  portfolio-analyst/              # 🆕 Phase 2 — AI portfolio review (data lives in Mini PORT API)
   ├── SKILL.md
   ├── config.yaml
   ├── scripts/
   │   ├── artifact_io.py         # Local copy
-  │   ├── portfolio_io.py        # Portfolio file ops (local to this skill)
-  │   └── portfolio_cli.py       # CLI: buy/sell/snapshot/allocation/report
+  │   └── collect_portfolio.py   # Calls GET /api/portfolio/* endpoints
   └── references/
 
   earnings-analysis/             # 🆕 Phase 3 — Post-earnings reports
@@ -151,121 +150,198 @@ skills/
 
 ---
 
-### Phase 2 Skills (Portfolio Management)
+### Phase 2: Portfolio Management
 
-#### 2.1 portfolio-manager (P0 — Build First)
+The original design had "portfolio-manager" as a skill with CLI commands for buy/sell/snapshot. But that's really a data management module — CRUD operations, P&L math, price fetching. These belong on the **FastAPI server**, not in an agent skill.
 
-**Purpose:** Track positions, calculate P&L, manage allocation. The central nervous system of the fund.
+**The split:**
+- **Mini PORT module** (FastAPI server) — all portfolio data, transactions, positions, P&L computation, allocation. Lives in `pfs/api/routers/portfolio.py` + `pfs/db/` tables. This is the portfolio equivalent of how we already handle financial data.
+- **portfolio-analyst skill** (agent skill) — thin AI layer that reads portfolio state from API and produces *analysis* artifacts: portfolio review narratives, rebalancing recommendations, thesis-portfolio alignment checks.
 
-**Adapted from:** Original design. No direct equity-research equivalent (institutional funds use Bloomberg PORT / internal systems).
+---
 
-**Artifacts:** `data/artifacts/_portfolio/`
+#### 2.0 Mini PORT — FastAPI Portfolio Module (P0 — Build First)
+
+**Purpose:** Server-side portfolio tracking, P&L computation, transaction history, and allocation analysis. Our mini version of Bloomberg PORT.
+
+**Why server-side, not a skill:**
+- Transactions, positions, and snapshots are **data** — they belong in the database alongside financials
+- P&L computation, allocation breakdown, and price fetching are **deterministic math** — no AI needed
+- Other skills (risk-manager, morning-briefing, fund-manager) all need portfolio data — a REST API is the clean contract
+- The Streamlit dashboard reads portfolio data the same way it reads financial data — via API
+
+**Implementation:**
 
 ```
-data/artifacts/_portfolio/
-  portfolio.json            # Master portfolio state
-  transactions.json         # Append-only trade log
-  snapshots/
-    2025-03-25.json         # Daily portfolio snapshots
-  allocation.json           # Current allocation breakdown
+pfs/
+  db/
+    models.py             # Add: Portfolio, Position, Transaction, Snapshot models
+    schema.sql            # Add: portfolio tables
+  analysis/
+    portfolio.py          # P&L engine, allocation, snapshot logic
+  api/
+    routers/
+      portfolio.py        # REST API endpoints
 ```
 
-**portfolio.json schema:**
+**Database tables:**
 
-```json
-{
-  "schema_version": "1.0",
-  "updated_at": "2025-03-25T16:00:00Z",
-  "cash": 50000.00,
-  "positions": [
-    {
-      "ticker": "NVDA",
-      "shares": 100,
-      "avg_cost": 125.50,
-      "current_price": 145.20,
-      "market_value": 14520.00,
-      "unrealized_pnl": 1970.00,
-      "unrealized_pnl_pct": 0.157,
-      "weight_pct": 0.145,
-      "thesis_status": "active",
-      "thesis_health_score": 78,
-      "sector": "Technology",
-      "conviction": "high",
-      "position_type": "long"
-    }
-  ],
-  "total_market_value": 100000.00,
-  "total_cost_basis": 92000.00,
-  "total_unrealized_pnl": 8000.00,
-  "total_realized_pnl": 2500.00,
-  "inception_date": "2025-01-15",
-  "benchmark": "SPY"
-}
+```sql
+CREATE TABLE portfolios (
+    id SERIAL PRIMARY KEY,
+    name TEXT NOT NULL DEFAULT 'default',
+    cash NUMERIC(14,2) NOT NULL DEFAULT 100000.00,
+    inception_date DATE NOT NULL,
+    benchmark TEXT DEFAULT 'SPY',
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE TABLE transactions (
+    id SERIAL PRIMARY KEY,
+    portfolio_id INTEGER REFERENCES portfolios(id),
+    date DATE NOT NULL,
+    ticker TEXT NOT NULL REFERENCES companies(ticker),
+    action TEXT NOT NULL CHECK (action IN ('buy', 'sell', 'dividend')),
+    shares NUMERIC(12,4) NOT NULL,
+    price NUMERIC(12,4) NOT NULL,
+    fees NUMERIC(8,2) DEFAULT 0,
+    notes TEXT,
+    created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE TABLE positions (
+    id SERIAL PRIMARY KEY,
+    portfolio_id INTEGER REFERENCES portfolios(id),
+    ticker TEXT NOT NULL REFERENCES companies(ticker),
+    shares NUMERIC(12,4) NOT NULL,
+    avg_cost NUMERIC(12,4) NOT NULL,
+    conviction TEXT CHECK (conviction IN ('high', 'medium', 'low')),
+    position_type TEXT DEFAULT 'long' CHECK (position_type IN ('long', 'short')),
+    opened_at DATE NOT NULL,
+    updated_at TIMESTAMPTZ DEFAULT NOW(),
+    UNIQUE(portfolio_id, ticker)
+);
+
+CREATE TABLE portfolio_snapshots (
+    id SERIAL PRIMARY KEY,
+    portfolio_id INTEGER REFERENCES portfolios(id),
+    date DATE NOT NULL,
+    total_market_value NUMERIC(14,2),
+    total_cost_basis NUMERIC(14,2),
+    cash NUMERIC(14,2),
+    unrealized_pnl NUMERIC(14,2),
+    realized_pnl NUMERIC(14,2),
+    positions_json JSONB,
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    UNIQUE(portfolio_id, date)
+);
 ```
 
-**transactions.json schema:**
+**REST API endpoints (new router: `/api/portfolio/`):**
 
-```json
-{
-  "schema_version": "1.0",
-  "transactions": [
-    {
-      "id": 1,
-      "date": "2025-01-15",
-      "ticker": "NVDA",
-      "action": "buy",
-      "shares": 50,
-      "price": 120.00,
-      "total": 6000.00,
-      "fees": 0,
-      "notes": "Initial position — data center thesis",
-      "thesis_ref": "data/artifacts/NVDA/thesis/thesis.json"
-    }
-  ]
-}
-```
-
-**CLI (5 subcommands):**
-
-```bash
-# Record a trade
-uv run python skills/portfolio-manager/scripts/portfolio_cli.py buy NVDA --shares 50 --price 120.00 --notes "Initial position"
-uv run python skills/portfolio-manager/scripts/portfolio_cli.py sell NVDA --shares 20 --price 150.00 --notes "Trimming after 25% gain"
-
-# Portfolio snapshot (fetches current prices, updates portfolio.json)
-uv run python skills/portfolio-manager/scripts/portfolio_cli.py snapshot
-
-# Allocation analysis
-uv run python skills/portfolio-manager/scripts/portfolio_cli.py allocation
-
-# Full portfolio report (markdown)
-uv run python skills/portfolio-manager/scripts/portfolio_cli.py report
-```
+| Endpoint | Method | Purpose |
+|----------|--------|---------|
+| `/api/portfolio/` | GET | Get portfolio summary (current positions, cash, total value) |
+| `/api/portfolio/positions` | GET | All open positions with current prices, P&L, weights |
+| `/api/portfolio/positions/{ticker}` | GET | Single position details with transaction history |
+| `/api/portfolio/transactions` | GET | Transaction history with filters (ticker, date range, action) |
+| `/api/portfolio/transactions` | POST | Record a trade (buy/sell/dividend). Server updates position + cash |
+| `/api/portfolio/snapshot` | POST | Take daily snapshot — server fetches prices, computes P&L, saves |
+| `/api/portfolio/allocation` | GET | Allocation breakdown by sector, conviction, position size |
+| `/api/portfolio/performance?period=ytd` | GET | Time-weighted return, vs benchmark, drawdown |
+| `/api/portfolio/pnl` | GET | Realized + unrealized P&L breakdown per position |
 
 **Key design decisions:**
-- **Append-only transactions** — never edit trade history, only append
-- **Snapshot-based P&L** — daily snapshots enable historical performance tracking
-- **Thesis linkage** — every position links to its thesis artifact; orphaned positions (no thesis) flagged as warnings
-- **Cash tracking** — cash balance updated on every buy/sell
-- **No broker integration (v1)** — manual trade entry. Broker API integration is a future enhancement
+- **Append-only transactions** — `transactions` table is insert-only, never updated or deleted
+- **Positions computed from transactions** — `positions` table is a materialized view of net shares + avg cost, recomputed on each trade
+- **Server-side snapshots** — Prefect cron triggers `POST /api/portfolio/snapshot` daily after market close. Server fetches batch prices and persists
+- **No broker integration (v1)** — manual trade entry via API. Broker API integration is a future enhancement
+- **Thesis linkage via ticker** — positions reference `companies(ticker)`, thesis data read from `data/artifacts/{ticker}/thesis/` or a future thesis DB table
 
 **Data flow:**
 ```
-User logs trade → transactions.json (append) → portfolio.json (recalculated)
-                                              → snapshot/{date}.json (daily)
-GET /api/prices/batch       → portfolio_cli.py snapshot → portfolio.json (prices updated)
-GET /api/portfolio/valuate  → portfolio.json            → total P&L computed server-side
-Reads thesis.json artifacts → portfolio.json            → thesis_health_score per position
+POST /api/portfolio/transactions     → transactions table (append)
+  Server auto-updates:               → positions table (recalculated)
+                                      → portfolios.cash (adjusted)
+
+POST /api/portfolio/snapshot          → Server fetches GET /api/prices/batch
+                                      → portfolio_snapshots table (daily)
+                                      → Positions updated with current_price
+
+GET /api/portfolio/positions          → Returns positions with live P&L
+GET /api/portfolio/allocation         → Returns sector/conviction/size breakdown
+GET /api/portfolio/performance        → Returns time-series from snapshots
 ```
 
-**Cross-skill integration:**
-- **Reads from thesis-tracker** — reads `data/artifacts/{ticker}/thesis/thesis.json` directly for thesis status and health score
-- **Calls REST API** — `GET /api/prices/batch`, `GET /api/portfolio/valuate` for current prices and P&L
-- **Read by risk-manager** — reads `data/artifacts/_portfolio/portfolio.json`
-- **Read by morning-briefing** — reads portfolio artifacts for daily P&L summary
-- **Read by fund-manager** — reads portfolio state for decision-making
+**Streamlit page:** New `pages/4_portfolio.py` — reads all data from `/api/portfolio/*` endpoints. Positions table, allocation pie chart, P&L waterfall, performance vs. benchmark chart.
 
-**Streamlit page:** New `pages/4_portfolio.py` — positions table, allocation pie chart, P&L waterfall, performance vs. benchmark
+---
+
+#### 2.1 portfolio-analyst (Agent Skill)
+
+**Purpose:** AI-driven portfolio analysis — what the portfolio manager skill was trying to do, but only the parts that actually need intelligence. Reads portfolio state from Mini PORT API and thesis artifacts, produces narrative analysis.
+
+**This is an actual agent skill** because it requires AI judgment: interpreting portfolio health, recommending rebalancing, connecting thesis developments to position sizing.
+
+**Artifacts:** `data/artifacts/_portfolio/analysis/`
+
+```
+data/artifacts/_portfolio/analysis/
+  portfolio_review.json       # Structured analysis
+  portfolio_review.md         # Narrative report
+```
+
+**Workflow (2 tasks):**
+
+| Task | Type | Description |
+|------|------|-------------|
+| 1 | Script | **Data Collection** — Call `GET /api/portfolio/positions`, `GET /api/portfolio/allocation`, `GET /api/portfolio/performance`. Read thesis artifacts for each position. Write `portfolio_snapshot.json` to artifacts |
+| 2 | AI | **Portfolio Review** — Interpret allocation vs. conviction alignment, identify orphaned positions (no thesis), flag concentration risks, recommend rebalancing actions. Write review narrative |
+
+**Skill scripts (thin):**
+- `scripts/collect_portfolio.py` — calls Mini PORT API endpoints, reads thesis artifacts, assembles data
+- `scripts/artifact_io.py` — local copy of JSON/Markdown I/O helpers
+
+**config.yaml:**
+```yaml
+name: portfolio-analyst
+version: "1.0"
+description: "AI portfolio review and rebalancing recommendations"
+
+triggers:
+  - cron: "0 17 * * 5"    # Weekly Friday after close
+    action: review
+  - event: task_request
+    action: review
+
+inputs:
+  api_endpoints:
+    - GET /api/portfolio/positions
+    - GET /api/portfolio/allocation
+    - GET /api/portfolio/performance
+  artifacts:
+    - "{ticker}/thesis/thesis.json"
+
+outputs:
+  path: "data/artifacts/_portfolio/analysis/"
+  files:
+    - portfolio_review.json
+    - portfolio_review.md
+```
+
+**CLI:**
+```bash
+# Collect data + generate analysis
+uv run python skills/portfolio-analyst/scripts/collect_portfolio.py
+# Agent then produces the AI narrative review
+```
+
+**Cross-skill reads (artifacts only):**
+- `data/artifacts/{ticker}/thesis/thesis.json` — thesis health per position
+- Mini PORT API — portfolio positions, allocation, performance
+
+**Read by:** risk-manager, morning-briefing, fund-manager
 
 ---
 
@@ -394,16 +470,17 @@ uv run python skills/risk-manager/scripts/risk_cli.py report            # Genera
 ```
 
 **REST API endpoints used:**
-- `GET /api/analysis/risk/portfolio` — server computes beta, correlation, VaR, drawdown *(new endpoint)*
+- `POST /api/analysis/risk/portfolio` — server computes beta, correlation, VaR, drawdown *(new endpoint)*
 - `GET /api/analysis/risk/{ticker}` — per-ticker risk metrics *(new endpoint)*
-- `GET /api/prices/batch?tickers=X,Y,Z` — batch prices for correlation *(new endpoint)*
+- `GET /api/portfolio/positions` — current positions from Mini PORT
+- `GET /api/portfolio/allocation` — allocation breakdown from Mini PORT
 
 **Skill scripts (thin):**
-- `scripts/risk_cli.py` — calls risk API endpoints, reads portfolio/thesis artifacts, writes risk report
+- `scripts/risk_cli.py` — calls risk + portfolio API endpoints, reads thesis artifacts, writes risk report
 - `scripts/artifact_io.py` — local copy of JSON/Markdown I/O helpers
 
-**Cross-skill reads (artifacts only, no imports):**
-- `data/artifacts/_portfolio/portfolio.json` — positions, allocation
+**Cross-skill reads (artifacts + API, no imports):**
+- `GET /api/portfolio/*` — positions, allocation from Mini PORT
 - `data/artifacts/{ticker}/thesis/thesis.json` — health scores per position
 
 #### 3.4 morning-briefing (P2)
@@ -569,22 +646,23 @@ Week 1:
   ☐ Move task_client.py → agents/task_client.py
   ☐ Delete mcp_helpers.py and api_client.py (skills call API directly)
   ☐ Update config.yaml in all 3 existing skills: mcp_tools → api_endpoints
-  ☐ Build new FastAPI endpoints: comps, batch prices, portfolio valuate
+  ☐ Build new FastAPI endpoint: GET /api/analysis/comps/{ticker}
 
-Week 2:
-  ☐ Refactor thesis-tracker (weight validation, subjective scoring template)
-  ☐ Build portfolio-manager skill (CLI + artifacts + portfolio_io.py local)
-  ☐ Add portfolio.json + transactions.json schemas
+Week 2 — Mini PORT module:
+  ☐ Add portfolio DB tables (portfolios, transactions, positions, portfolio_snapshots)
+  ☐ Build pfs/analysis/portfolio.py — P&L engine, allocation, snapshot logic
+  ☐ Build pfs/api/routers/portfolio.py — full REST API (9 endpoints)
+  ☐ Register router in app.py
+  ☐ Build Prefect flow for daily POST /api/portfolio/snapshot
 
 Week 3:
+  ☐ Refactor thesis-tracker (weight validation, subjective scoring template)
   ☐ Build Streamlit portfolio page (positions table, allocation chart, P&L)
-  ☐ Wire portfolio-manager to thesis-tracker (reads thesis.json artifacts)
-  ☐ Build portfolio snapshot automation (Prefect flow, daily after market close)
+  ☐ Build portfolio-analyst skill (collect_portfolio.py + AI review workflow)
 
 Week 4:
   ☐ Build risk-manager skill (risk metrics, alerts, rules)
-  ☐ Build new FastAPI endpoints: risk/portfolio, risk/{ticker}
-  ☐ Wire risk-manager to portfolio-manager (reads portfolio artifacts)
+  ☐ Build new FastAPI endpoints: risk/portfolio, risk/{ticker}, correlation-matrix
   ☐ Add risk section to Streamlit dashboard
 ```
 
@@ -651,23 +729,52 @@ The FastAPI server is the **computation and data hub**. Skills are thin clients 
 | `GET /api/analysis/profile/{ticker}` | company-profile |
 | `GET /api/analysis/valuation/{ticker}` | company-profile |
 | `GET /api/analysis/coverage/{ticker}` | etl-coverage |
-| `GET /api/analysis/current-price/{ticker}` | portfolio-manager |
+| `GET /api/analysis/current-price/{ticker}` | all skills |
 | `POST /api/analysis/reports` | all skills (persist to DB) |
 
 ### New Endpoints to Build
 
-| Endpoint | Phase | Needed by | Purpose |
-|----------|-------|-----------|---------|
-| **`GET /api/analysis/comps/{ticker}`** | 2 | company-profile | Server-side comps with yfinance + caching + TTL. Replaces local `build_comps.py` heavy lifting |
-| **`GET /api/prices/batch?tickers=X,Y,Z`** | 2 | portfolio-manager, risk-manager | Batch current price fetch for portfolio valuation. Single call instead of N individual requests |
-| **`POST /api/portfolio/valuate`** | 2 | portfolio-manager | Accept positions JSON, return market values + P&L + allocation breakdown. Heavy math on server |
-| **`GET /api/financials/{ticker}/quarterly?quarters=8`** | 3 | earnings-analysis | Quarterly income/balance/cash flow breakdown for QoQ comparison |
-| **`GET /api/analysis/risk/{ticker}`** | 3 | risk-manager | Per-ticker beta, volatility, correlation vs benchmark. Computed from price history on server |
-| **`POST /api/analysis/risk/portfolio`** | 3 | risk-manager | Accept portfolio positions, return portfolio-level beta, VaR, max drawdown, sector concentration |
-| **`GET /api/analysis/screen`** | 4 | idea-generation | Parameterized stock screening across all companies: revenue growth, PE, FCF yield, margins, etc. |
-| **`GET /api/analysis/correlation-matrix?tickers=X,Y,Z`** | 3 | risk-manager, fund-manager | Pairwise correlation matrix from price data |
-| **`GET /api/catalysts/upcoming?days=30`** | 4 | catalyst-calendar, morning-briefing | Aggregated catalyst events across all tracked tickers |
-| **`POST /api/knowledge/ingest`** | 5 | knowledge-base | Document ingestion and structured extraction |
+**Phase 2 — Mini PORT module (new router: `/api/portfolio/`)**
+
+| Endpoint | Method | Purpose |
+|----------|--------|---------|
+| `/api/portfolio/` | GET | Portfolio summary — cash, total value, position count |
+| `/api/portfolio/positions` | GET | All open positions with current prices, P&L, weights |
+| `/api/portfolio/positions/{ticker}` | GET | Single position details with transaction history |
+| `/api/portfolio/transactions` | GET | Transaction history (filterable by ticker, date range, action) |
+| `/api/portfolio/transactions` | POST | Record a trade — server updates position + cash automatically |
+| `/api/portfolio/snapshot` | POST | Daily snapshot — server fetches prices, computes P&L, saves |
+| `/api/portfolio/allocation` | GET | Allocation by sector, conviction, position size |
+| `/api/portfolio/performance?period=ytd` | GET | Time-weighted return, vs benchmark, drawdown |
+| `/api/portfolio/pnl` | GET | Realized + unrealized P&L breakdown per position |
+
+**Phase 2 — Other new endpoints**
+
+| Endpoint | Needed by | Purpose |
+|----------|-----------|---------|
+| **`GET /api/analysis/comps/{ticker}`** | company-profile | Server-side comps with yfinance + caching + TTL |
+
+**Phase 3 — Earnings & Risk**
+
+| Endpoint | Needed by | Purpose |
+|----------|-----------|---------|
+| **`GET /api/financials/{ticker}/quarterly?quarters=8`** | earnings-analysis | Quarterly breakdown for QoQ comparison |
+| **`GET /api/analysis/risk/{ticker}`** | risk-manager | Per-ticker beta, volatility, correlation vs benchmark |
+| **`POST /api/analysis/risk/portfolio`** | risk-manager | Portfolio-level beta, VaR, max drawdown, sector concentration |
+| **`GET /api/analysis/correlation-matrix?tickers=X,Y,Z`** | risk-manager, fund-manager | Pairwise correlation matrix from price data |
+
+**Phase 4 — Intelligence**
+
+| Endpoint | Needed by | Purpose |
+|----------|-----------|---------|
+| **`GET /api/analysis/screen`** | idea-generation | Parameterized stock screening across all companies |
+| **`GET /api/catalysts/upcoming?days=30`** | catalyst-calendar, morning-briefing | Aggregated catalyst events |
+
+**Phase 5 — Knowledge**
+
+| Endpoint | Needed by | Purpose |
+|----------|-----------|---------|
+| **`POST /api/knowledge/ingest`** | knowledge-base | Document ingestion and structured extraction |
 
 ### Design Principles for New Endpoints
 
@@ -701,7 +808,7 @@ These rules govern how ALL skills are built, current and future:
 ## Appendix: Skill Dependency Graph
 
 ```
- DATA PLANE (REST API)
+ DATA PLANE (REST API + Mini PORT)
         │
         ▼
  ┌──────────────┐     ┌──────────────┐     ┌──────────────┐
@@ -719,9 +826,9 @@ These rules govern how ALL skills are built, current and future:
            ▼                 ▼                  ▼
     ┌──────────────┐  ┌──────────────┐  ┌──────────────┐
     │ earnings-    │  │ earnings-    │  │ portfolio-   │
-    │ analysis     │  │ preview      │  │ manager      │
+    │ analysis     │  │ preview      │  │ analyst      │
     └──────┬───────┘  └──────────────┘  └──────┬───────┘
-           │ triggers thesis update             │ reads positions
+           │ triggers thesis update             │ reads portfolio API
            ▼                                    ▼
     ┌──────────────┐                    ┌──────────────┐
     │ model-       │                    │ risk-        │
@@ -741,7 +848,7 @@ These rules govern how ALL skills are built, current and future:
                          │ base         │
                          └──────────────┘
 
-  Arrows = "reads artifacts from"
+  Skills read from REST API (data + portfolio) and other skill artifacts.
   No skill invokes another skill directly.
 ```
 
