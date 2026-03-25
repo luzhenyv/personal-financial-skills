@@ -29,7 +29,11 @@ import sys
 from datetime import date
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[3]))
+# Add project root and current script directory to path
+_PROJECT_ROOT = str(Path(__file__).resolve().parents[3])
+_SCRIPT_DIR = str(Path(__file__).resolve().parent)
+sys.path.insert(0, _PROJECT_ROOT)
+sys.path.insert(0, _SCRIPT_DIR)
 
 
 # ── Shared helpers ───────────────────────────────────────────────────────────
@@ -37,7 +41,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[3]))
 
 def _regenerate_report(ticker: str) -> Path:
     """Regenerate the markdown report and return its path."""
-    from skills._lib.thesis_io import generate_thesis_markdown
+    from thesis_io import generate_thesis_markdown
 
     md = generate_thesis_markdown(ticker)
     md_path = Path(f"data/artifacts/{ticker}/thesis/thesis_{ticker}.md")
@@ -196,7 +200,7 @@ def cmd_create(args: argparse.Namespace) -> None:
         print("Error: provide --thesis, --interactive, --from-profile, or --from-json")
         sys.exit(1)
 
-    from skills._lib.thesis_io import create_thesis
+    from thesis_io import create_thesis
 
     create_thesis(ticker, **data)
     md_path = _regenerate_report(ticker)
@@ -210,7 +214,7 @@ def cmd_create(args: argparse.Namespace) -> None:
 
 
 def _interactive_update(ticker: str) -> dict:
-    from skills._lib.thesis_io import get_active_thesis
+    from thesis_io import get_active_thesis
 
     thesis = get_active_thesis(ticker)
     if thesis is None:
@@ -271,7 +275,7 @@ def cmd_update(args: argparse.Namespace) -> None:
         print("Error: provide --event or --interactive")
         sys.exit(1)
 
-    from skills._lib.thesis_io import add_thesis_update
+    from thesis_io import add_thesis_update
 
     result = add_thesis_update(ticker, **data)
     md_path = _regenerate_report(ticker)
@@ -286,9 +290,12 @@ def cmd_update(args: argparse.Namespace) -> None:
 
 def _compute_objective_score(ticker: str, assumptions: list[dict]) -> tuple[float, list[dict]]:
     """Compute objective health score from financial data."""
-    from skills._lib.api_client import get_profile
-
-    profile = get_profile(ticker, years=3)
+    import os
+    import httpx
+    _API_BASE = os.environ.get("PFS_API_URL", "http://127.0.0.1:8000")
+    r = httpx.get(f"{_API_BASE}/api/analysis/profile/{ticker}", params={"years": 3}, timeout=60)
+    r.raise_for_status()
+    profile = r.json()
     if "error" in profile:
         return 50.0, []
 
@@ -356,7 +363,7 @@ def _score_from_thresholds(value: float, thresholds: dict) -> float:
 
 def _run_health_check(ticker: str) -> dict:
     """Run a full health check for *ticker* and return the result dict."""
-    from skills._lib.thesis_io import get_active_thesis, add_health_check
+    from thesis_io import get_active_thesis, add_health_check
 
     thesis = get_active_thesis(ticker)
     if thesis is None:
@@ -430,7 +437,7 @@ def _run_health_check(ticker: str) -> dict:
 
 def cmd_check(args: argparse.Namespace) -> None:
     if args.all:
-        from skills._lib.thesis_io import get_all_active_theses
+        from thesis_io import get_all_active_theses
 
         theses = get_all_active_theses()
         if not theses:
@@ -464,7 +471,7 @@ def cmd_check(args: argparse.Namespace) -> None:
 def cmd_catalyst(args: argparse.Namespace) -> None:
     ticker = args.ticker.upper()
 
-    from skills._lib.thesis_io import (
+    from thesis_io import (
         get_catalysts, add_catalyst, update_catalyst,
     )
 
@@ -529,7 +536,7 @@ def cmd_catalyst(args: argparse.Namespace) -> None:
 def cmd_report(args: argparse.Namespace) -> None:
     ticker = args.ticker.upper()
 
-    from skills._lib.thesis_io import generate_thesis_markdown
+    from thesis_io import generate_thesis_markdown
 
     md = generate_thesis_markdown(ticker)
     if not md:
