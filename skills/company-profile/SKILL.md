@@ -47,15 +47,25 @@ uv run python -m pfs.etl.pipeline ingest {TICKER} --years 5
 |------|------|--------------|--------|
 | **1** | Company Research | REST API data + `data/raw/{TICKER}/` 10-K HTML | 6 structured JSON files in `profile/` |
 | **2** | Financial Analysis | Task 1 `competitive_landscape.json` | `comps_table.json` in `profile/` |
-| **3** | Report Generation | Tasks 1–2 + REST API data | `company_profile.md` in `profile/` + DB row |
+| **3** | Report Generation | Tasks 1–2 + REST API data | `company_profile.md` in `profile/` |
 
 **Default mode**: Run all 3 tasks sequentially. If the user requests a specific task, execute only that task.
 
 ---
 
-## Task 1: Company Research (AI-Driven)
+## Task 1: Company Research
 
-Read data from the REST API and `data/artifacts/{TICKER}/profile/10k_raw_sections.json` (extracted by the ETL pipeline). Create 6 structured JSON files in `data/artifacts/{TICKER}/profile/`. No script — this is entirely AI-driven.
+### Pre-step: Run deterministic extraction
+
+```bash
+uv run python skills/company-profile/scripts/extract_10k.py {TICKER}
+```
+
+This script reads `10k_raw_sections.json` and the REST API to produce `*_skeleton.json` files that pre-populate structured fields (executives, risk factor headings, segments, company metadata). The AI then enriches these skeletons with narrative analysis to produce the final 6 JSON files.
+
+### AI-driven enrichment
+
+Read data from the REST API, the skeleton files, and `data/artifacts/{TICKER}/profile/10k_raw_sections.json`. Create 6 structured JSON files in `data/artifacts/{TICKER}/profile/`.
 
 **REST API endpoints to use**:
 - `GET /api/companies/{TICKER}` — metadata, sector, description
@@ -86,17 +96,22 @@ Read data from the REST API and `data/artifacts/{TICKER}/profile/10k_raw_section
 ```bash
 uv run python skills/company-profile/scripts/build_comps.py {TICKER}
 #   --peers AMD,INTC,AVGO,QCOM    override peer list
+#   --refresh                      bypass cache
 ```
 
-Reads peers from `data/artifacts/{TICKER}/profile/competitive_landscape.json`, fetches market cap / revenue / margins / multiples via yfinance, computes peer statistics. Saves → `data/artifacts/{TICKER}/profile/comps_table.json`.
+Calls `GET /api/analysis/comps/{ticker}` to fetch peer comparison data. The server reads peers from `competitive_landscape.json`, fetches market data via yfinance with caching, and computes peer statistics. Saves → `data/artifacts/{TICKER}/profile/comps_table.json`.
 
 ---
 
 ## Task 3: Report Generation
 
-### Pre-step (agent-driven): Write `financial_data.json`
+### Pre-step (agent-driven): Write `financial_data.json` and `valuation_summary.json`
 
-Before running the script, the agent must call `GET /api/financials/{TICKER}/annual` and write the result to `data/artifacts/{TICKER}/profile/financial_data.json`. This file contains combined income, balance sheet, cash flow, and metric data with split-adjusted EPS.
+Before running the script, the agent must:
+1. Call `GET /api/financials/{TICKER}/annual` → write to `data/artifacts/{TICKER}/profile/financial_data.json`
+2. Call `GET /api/analysis/valuation/{TICKER}` → write to `data/artifacts/{TICKER}/profile/valuation_summary.json`
+
+These files contain combined financials with split-adjusted EPS, and DCF valuation with bear/base/bull scenarios.
 
 ### Run the script
 
@@ -105,15 +120,11 @@ uv run python skills/company-profile/scripts/generate_report.py {TICKER}
 #   --price 225.50    supply price if yfinance is stale
 ```
 
-Assembles all JSON files from `data/artifacts/{TICKER}/profile/` into a markdown report with 14 sections (header, business summary, management, financials, margins, balance sheet, returns, valuation, comps, competitive landscape, thesis, risks, opportunities, appendix).
+Assembles all JSON files from `data/artifacts/{TICKER}/profile/` into a markdown report with 15 sections (header, business summary, management, financials, margins, balance sheet, returns, DCF valuation, valuation multiples, comps, competitive landscape, thesis, risks, opportunities, appendix).
 
 **Formatting**: billions for large amounts (`$16.7B`), 1 decimal % , directional arrows (`+25.3%↑`), `N/A` for missing data, split-adjusted per-share metrics.
 
-### Post-step (agent-driven): Persist to DB
-
-After the script runs, call `POST /api/analysis/reports` with `{ticker, report_type: 'company_profile', title, content_md, file_path}` to upsert the report into the `analysis_reports` table. Read the generated `company_profile.md` and pass its content.
-
-**Outputs**: `data/artifacts/{TICKER}/profile/company_profile.md`, viewable in Streamlit.
+**Outputs**: `data/artifacts/{TICKER}/profile/company_profile.md`, viewable in Streamlit. Reports are version-controlled via git.
 
 ---
 
@@ -124,12 +135,13 @@ After the script runs, call `POST /api/analysis/reports` with `{ticker, report_t
 uv run python -m pfs.etl.pipeline ingest {TICKER} --years 5
 
 # Skill workflow
-# → Task 1: Create 6 JSON files via AI using REST API data
-# → Task 2:
+# → Task 1 pre-step: Deterministic extraction from 10-K
+uv run python skills/company-profile/scripts/extract_10k.py {TICKER}
+# → Task 1: AI enriches skeleton files into 6 JSON artifacts
+# → Task 2: Comps via API
 uv run python skills/company-profile/scripts/build_comps.py {TICKER}
-# → Task 3 pre-step: Agent calls GET /api/financials/{TICKER}/annual → writes financial_data.json
+# → Task 3 pre-step: Agent writes financial_data.json + valuation_summary.json from API
 uv run python skills/company-profile/scripts/generate_report.py {TICKER}
-# → Task 3 post-step: Agent calls POST /api/analysis/reports to persist in DB
 ```
 
 ## Quality Checks

@@ -38,7 +38,7 @@ Run these checks after completing all 3 tasks for a given ticker.
 ## Output
 
 - [ ] Report saved to `data/artifacts/{TICKER}/profile/company_profile.md`
-- [ ] Report persisted via `POST /api/analysis/reports` to `analysis_reports` table
+- [ ] Valuation summary includes DCF fair value estimate
 
 ## Verification
 

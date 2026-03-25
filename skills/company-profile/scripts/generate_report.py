@@ -5,11 +5,9 @@ Assembles a comprehensive markdown company profile from:
   - data/artifacts/{TICKER}/profile/*.json  (created by Tasks 1 & 2 + agent pre-step)
 
 All data must be pre-written as JSON artifacts before running this script.
-The agent is responsible for calling MCP tools and writing:
-  - financial_data.json   (via MCP get_annual_financials)
-
-After the report is written, the agent should call MCP save_analysis_report
-to persist the report in the database.
+The agent is responsible for calling the REST API and writing:
+  - financial_data.json   (via GET /api/financials/{TICKER}/annual)
+  - valuation_summary.json (via GET /api/analysis/valuation/{TICKER})
 
 Saves the report to:
   - data/artifacts/{TICKER}/profile/company_profile.md  (filesystem)
@@ -25,8 +23,9 @@ Required JSON files in data/artifacts/{TICKER}/profile/:
     competitive_landscape.json  — competitors and moat analysis
     financial_segments.json     — revenue by segment/geography
     investment_thesis.json      — bull case bullets and opportunities
-    comps_table.json            — comparable company analysis (from build_comps.py)
-    financial_data.json         — annual financials with split-adjusted EPS (from MCP)
+    comps_table.json            — comparable company analysis (from REST API or build_comps.py)
+    financial_data.json         — annual financials with split-adjusted EPS (from REST API)
+    valuation_summary.json      — DCF + scenario + comps valuation (from REST API, optional)
 """
 
 from __future__ import annotations
@@ -138,7 +137,7 @@ def get_stock_info(ticker: str) -> dict[str, Any]:
 def load_financial_data(processed_dir: Path) -> list[dict]:
     """Load split-adjusted financial data from the JSON artifact.
 
-    The agent must write ``financial_data.json`` (via MCP ``get_annual_financials``)
+    The agent must write ``financial_data.json`` (via ``GET /api/financials/{TICKER}/annual``)
     before running this script.
     """
     data = load_json(processed_dir / "financial_data.json")
@@ -432,7 +431,66 @@ def section_valuation(ticker: str, mkt_cap_b: float | None, price: float | None,
     return lines
 
 
-def section_comps(ticker: str, comps_data: dict) -> list[str]:
+def section_dcf_summary(valuation_data: dict, current_price: float | None) -> list[str]:
+    """Render DCF valuation summary from valuation_summary.json."""
+    if not valuation_data:
+        return []
+
+    lines = ["## DCF Valuation Summary", ""]
+
+    recommendation = valuation_data.get("recommendation", "N/A")
+    target_price = valuation_data.get("target_price")
+    upside_pct = valuation_data.get("upside_pct")
+
+    target_str = f"${target_price:.2f}" if target_price else "N/A"
+    upside_str = fmt_pct(upside_pct * 100 if upside_pct else None)
+    price_str = f"${current_price:.2f}" if current_price else "N/A"
+
+    lines.append(f"**Recommendation:** {recommendation}  |  "
+                 f"**Target Price:** {target_str}  |  "
+                 f"**Upside:** {upside_str}  |  "
+                 f"**Current:** {price_str}")
+    lines.append("")
+
+    # DCF details
+    dcf = valuation_data.get("dcf")
+    if dcf:
+        wacc = dcf.get("wacc")
+        tg = dcf.get("terminal_growth")
+        ev = dcf.get("enterprise_value")
+        eq = dcf.get("equity_value")
+        implied = dcf.get("implied_price")
+
+        lines.append("### Base Case DCF")
+        lines.append("")
+        lines.append("| Parameter | Value |")
+        lines.append("|-----------|-------|")
+        lines.append(f"| WACC | {fmt_pct_plain(wacc * 100 if wacc else None)} |")
+        lines.append(f"| Terminal Growth | {fmt_pct_plain(tg * 100 if tg else None)} |")
+        lines.append(f"| Enterprise Value | {fmt_b(ev / 1e9 if ev and ev > 1e6 else ev)} |")
+        lines.append(f"| Equity Value | {fmt_b(eq / 1e9 if eq and eq > 1e6 else eq)} |")
+        lines.append(f"| Implied Share Price | ${implied:.2f} |" if implied else "| Implied Share Price | N/A |")
+        lines.append("")
+
+    # Scenarios
+    scenarios = valuation_data.get("scenarios", {})
+    scenario_data = scenarios.get("scenarios") if isinstance(scenarios, dict) else None
+    if scenario_data:
+        lines.append("### Scenario Analysis")
+        lines.append("")
+        lines.append("| Scenario | Implied Price | Upside/Downside |")
+        lines.append("|----------|--------------|-----------------|")
+        for name in ("bear", "base", "bull"):
+            s = scenario_data.get(name, {})
+            p = s.get("implied_price")
+            u = s.get("upside")
+            price_s = f"${p:.2f}" if p else "N/A"
+            upside_s = fmt_pct(u * 100 if u else None)
+            lines.append(f"| {name.capitalize()} | {price_s} | {upside_s} |")
+        lines.append("")
+
+    lines += ["---", ""]
+    return lines
     peers = comps_data.get("peers", [])
     summary = comps_data.get("peer_summary", {})
     if not peers:
@@ -570,11 +628,11 @@ def section_appendix(ticker: str, processed_dir: Path) -> list[str]:
         "## Appendix: Data Sources", "",
         "| Section | Source |",
         "|---------|--------|",
-        "| Financial Statements | MCP (PostgreSQL) via ETL pipeline |",
+        "| Financial Statements | REST API (PostgreSQL) via ETL pipeline |",
         "| 10-K Sections | SEC EDGAR HTML filing, parsed by section_extractor.py |",
-        "| Management / Risks / Business | 10-K Item 1, 1A, 7, 10 (AI-parsed via MCP) |",
-        "| Market Data, Valuation | Alpha Vantage / Yahoo Finance |",
-        "| Comparable Companies | Yahoo Finance, build_comps.py |",
+        "| Management / Risks / Business | 10-K Item 1, 1A, 7, 10 (AI-parsed from raw sections) |",
+        "| Market Data, Valuation | REST API + Alpha Vantage / Yahoo Finance |",
+        "| Comparable Companies | REST API /api/analysis/comps/ + Yahoo Finance |",
         "",
         f"*Processed files: {', '.join(sorted(files))}*",
         "",
@@ -603,13 +661,14 @@ def main():
     segments     = load_json(processed_dir / "financial_segments.json")
     thesis       = load_json(processed_dir / "investment_thesis.json")
     comps_data   = load_json(processed_dir / "comps_table.json")
+    valuation    = load_json(processed_dir / "valuation_summary.json")
 
-    # ── Load financial data from JSON artifact (written by agent via MCP) ──────
+    # ── Load financial data from JSON artifact (written by agent via REST API) ──
     fin_data = load_financial_data(processed_dir)
     if not fin_data:
         print(
             f"Warning: No financial_data.json for {ticker}. "
-            f"The agent must call MCP get_annual_financials and write "
+            f"The agent must call GET /api/financials/{ticker}/annual and write "
             f"data/artifacts/{ticker}/profile/financial_data.json before running this script."
         )
 
@@ -642,6 +701,8 @@ def main():
         all_sections += section_balance_sheet(fin_data)
         all_sections += section_returns(fin_data)
     all_sections += section_valuation(ticker, mkt_cap, price, fin_data, info)
+    if valuation:
+        all_sections += section_dcf_summary(valuation, price)
     if comps_data:
         all_sections += section_comps(ticker, comps_data)
     if competitive:
@@ -663,7 +724,7 @@ def main():
 
     print(f"\n✓ Report complete: data/artifacts/{ticker}/profile/company_profile.md")
     print(f"  View in Streamlit: http://localhost:8501")
-    print(f"  To persist in DB, call MCP save_analysis_report from the agent.")
+    print(f"  Report saved. Markdown managed by git.")
 
 
 if __name__ == "__main__":

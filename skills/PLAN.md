@@ -63,14 +63,14 @@ The `skills/_lib/` directory violates agent skill project structure. Each file m
 
 The skill works but has structural gaps that will compound as we add more skills that depend on profile data.
 
-| Issue | What to do | Priority |
-|-------|-----------|----------|
-| **Task 1 is fully AI-driven** | Extract 10-K parsing into a reusable script (`scripts/extract_10k.py`). Keep AI interpretation for narrative fields, but structured field extraction (revenue segments, executives) should be deterministic | P1 |
-| **No valuation section** | Add DCF summary to profile output by calling `GET /api/analysis/valuation/{ticker}`. Profile should include fair value estimate | P2 |
-| **Comps depend on yfinance live calls** | Move comps computation to FastAPI: `GET /api/analysis/comps/{ticker}`. The server handles yfinance calls, caching, and TTL. `build_comps.py` becomes a thin script that calls the API endpoint | P1 |
-| **No markdown-to-DB persistence for Task 1** | Task 3 posts report to DB, but Task 1 JSON artifacts are only local. Add `POST /api/analysis/reports` call after Task 1 to persist structured data too | P3 |
-| **Config triggers are passive** | `config.yaml` defines 10-K trigger, but no active listener. Wire into task dispatcher event matching | P2 |
-| **Remove MCP references** | Update `config.yaml`: replace `mcp_tools` with `api_endpoints`. Update `generate_report.py` comments to say "REST API" not "MCP" | P0 |
+| Issue | What to do | Priority | Status |
+|-------|-----------|----------|--------|
+| **Task 1 is fully AI-driven** | Extract 10-K parsing into a reusable script (`scripts/extract_10k.py`). Keep AI interpretation for narrative fields, but structured field extraction (revenue segments, executives) should be deterministic | P1 | ✅ Done — `extract_10k.py` created; outputs `*_skeleton.json` files |
+| **No valuation section** | Add DCF summary to profile output by calling `GET /api/analysis/valuation/{ticker}`. Profile should include fair value estimate | P2 | ✅ Done — `section_dcf_summary()` added to `generate_report.py`; loads `valuation_summary.json` |
+| **Comps depend on yfinance live calls** | Move comps computation to FastAPI: `GET /api/analysis/comps/{ticker}`. The server handles yfinance calls, caching, and TTL. `build_comps.py` becomes a thin script that calls the API endpoint | P1 | ✅ Done — `pfs/analysis/comps.py` + API endpoint added; `build_comps.py` rewritten as thin client |
+| **No markdown-to-DB persistence for Task 1** | Task 3 posts report to DB, but Task 1 JSON artifacts are only local. Add `POST /api/analysis/reports` call after Task 1 to persist structured data too | P3 | ⏭️ Skipped — markdown reports managed via git |
+| **Config triggers are passive** | `config.yaml` defines 10-K trigger, but no active listener. Wire into task dispatcher event matching | P2 | ✅ Done — `prefect/flows/filing_check.py` fixed to route 10-K → company-profile |
+| **Remove MCP references** | Update `config.yaml`: replace `mcp_tools` with `api_endpoints`. Update `generate_report.py` comments to say "REST API" not "MCP" | P0 | ✅ Done — `config.yaml`, `generate_report.py`, `quality-checks.md` updated |
 
 ### 1.2 thesis-tracker — Light Refactor
 

@@ -45,7 +45,7 @@ def queue_analysis_tasks(filings_output: str):
                 continue
             ticker = parts[1]
             form_type = parts[2]
-            skill = "earnings-analysis" if form_type in ("10-Q", "10-K") else "company-profile"
+            skill = "company-profile" if form_type == "10-K" else "earnings-analysis"
             task_obj = Task(
                 type="event_triggered",
                 skill=skill,

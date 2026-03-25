@@ -1,6 +1,6 @@
 name: company-profile
-version: "1.0"
-description: "Generate 1-page company tearsheet with financials, comps, and report"
+version: "1.1"
+description: "Generate comprehensive company profile with financials, comps, valuation, and report"
 
 triggers:
   - event: new_filing
@@ -10,21 +10,33 @@ triggers:
     action: generate
 
 inputs:
-  mcp_tools:
-    - get_company
-    - get_income_statements
-    - get_balance_sheets
-    - get_cash_flows
-    - get_financial_metrics
-    - get_prices
-    - get_revenue_segments
+  api_endpoints:
+    - GET /api/companies/{ticker}
+    - GET /api/financials/{ticker}/income-statements
+    - GET /api/financials/{ticker}/balance-sheets
+    - GET /api/financials/{ticker}/cash-flows
+    - GET /api/financials/{ticker}/metrics
+    - GET /api/financials/{ticker}/prices
+    - GET /api/financials/{ticker}/segments
+    - GET /api/financials/{ticker}/stock-splits
+    - GET /api/financials/{ticker}/annual
+    - GET /api/filings/{ticker}/
+    - GET /api/analysis/valuation/{ticker}
+    - GET /api/analysis/comps/{ticker}
   artifacts: []
 
 outputs:
   path: "data/artifacts/{ticker}/profile/"
   files:
-    - profile.json
-    - comps.json
-    - company_report.md
+    - company_overview.json
+    - management_team.json
+    - risk_factors.json
+    - competitive_landscape.json
+    - financial_segments.json
+    - investment_thesis.json
+    - comps_table.json
+    - financial_data.json
+    - valuation_summary.json
+    - company_profile.md
 
 requires_intelligence: true
