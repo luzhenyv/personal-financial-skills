@@ -45,7 +45,7 @@ def _artifact_commit(ticker: str, description: str) -> None:
 
 def render_thesis_edit_tab(d: ThesisPageData) -> None:
     """Render the Edit tab with forms for thesis text and catalyst notes."""
-    from skills._lib.thesis_io import (
+    from dashboard.utils.thesis_io import (
         update_thesis,
         add_catalyst,
         update_catalyst_notes,

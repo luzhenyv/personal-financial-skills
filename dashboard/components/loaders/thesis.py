@@ -5,7 +5,6 @@ Fetches all thesis data in a single call so tab renderers receive a plain
 """
 
 from __future__ import annotations
-
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -34,7 +33,7 @@ def load_thesis_page_data(ticker: str) -> ThesisPageData | None:
     Returns:
         A :class:`ThesisPageData` instance, or ``None`` if not found.
     """
-    from skills._lib.thesis_io import get_thesis_detail
+    from dashboard.utils.thesis_io import get_thesis_detail
 
     detail = get_thesis_detail(ticker)
     if detail is None:

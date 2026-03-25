@@ -37,7 +37,7 @@ if "chat_messages" not in st.session_state:
 
 
 def _get_task_client():
-    from skills._lib.task_client import TaskClient
+    from dashboard.utils.task_client import TaskClient
     return TaskClient(base_url=API_URL)
 
 
