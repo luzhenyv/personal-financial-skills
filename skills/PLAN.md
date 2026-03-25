@@ -51,13 +51,13 @@ Skills stay thin: fetch data from API → let AI analyze → write artifacts.
 
 The `skills/_lib/` directory violates agent skill project structure. Each file must be migrated:
 
-| Current `_lib/` file | Migration plan | Priority |
-|----------------------|----------------|----------|
-| `mcp_helpers.py` | **Delete.** All functions are thin REST API wrappers. Skills call the API directly via `httpx` | P0 |
-| `api_client.py` | **Promote to API.** Functions like `get_profile()`, `get_valuation()`, `get_coverage()` already call FastAPI endpoints. Skills call those endpoints directly. Delete this file | P0 |
-| `artifact_io.py` | **Copy into each skill** that needs it (company-profile, thesis-tracker). It's lightweight file I/O — ~80 lines. Each skill gets its own copy in `<skill>/scripts/artifact_io.py` | P0 |
-| `thesis_io.py` | **Move to `thesis-tracker/scripts/thesis_io.py`**. Only thesis-tracker uses it. If portfolio-manager needs to read thesis files, it reads the JSON directly | P0 |
-| `task_client.py` | **Move to `agents/task_client.py`**. Used by the task dispatcher agent, not by skills | P0 |
+| Current `_lib/` file | Migration plan | Priority | Status |
+|----------------------|----------------|----------|--------|
+| `mcp_helpers.py` | **Delete.** All functions are thin REST API wrappers. Skills call the API directly via `httpx` | P0 | ✅ Done |
+| `api_client.py` | **Promote to API.** Functions like `get_profile()`, `get_valuation()`, `get_coverage()` already call FastAPI endpoints. Skills call those endpoints directly. Delete this file | P0 | ✅ Done |
+| `artifact_io.py` | **Copy into each skill** that needs it (company-profile, thesis-tracker). It's lightweight file I/O — ~80 lines. Each skill gets its own copy in `<skill>/scripts/artifact_io.py` | P0 | ✅ Done |
+| `thesis_io.py` | **Move to `thesis-tracker/scripts/thesis_io.py`**. Only thesis-tracker uses it. If portfolio-manager needs to read thesis files, it reads the JSON directly | P0 | ✅ Done |
+| `task_client.py` | **Move to `agents/task_client.py`**. Used by the task dispatcher agent, not by skills | P0 | ✅ Done |
 
 ### 1.1 company-profile — Moderate Refactor
 
