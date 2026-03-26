@@ -319,3 +319,62 @@ CREATE TABLE etl_runs (
 );
 
 CREATE INDEX idx_etl_runs_ticker ON etl_runs(ticker, started_at);
+
+-- ============================================
+-- PORTFOLIO (Mini PORT)
+-- ============================================
+
+CREATE TABLE portfolios (
+    id SERIAL PRIMARY KEY,
+    name VARCHAR(100) NOT NULL DEFAULT 'default',
+    cash NUMERIC(14,2) NOT NULL DEFAULT 100000.00,
+    inception_date DATE NOT NULL,
+    benchmark VARCHAR(10) DEFAULT 'SPY',
+    created_at TIMESTAMP DEFAULT NOW(),
+    updated_at TIMESTAMP DEFAULT NOW()
+);
+
+CREATE TABLE transactions (
+    id SERIAL PRIMARY KEY,
+    portfolio_id INTEGER NOT NULL REFERENCES portfolios(id),
+    date DATE NOT NULL,
+    ticker VARCHAR(10) NOT NULL REFERENCES companies(ticker),
+    action VARCHAR(10) NOT NULL CHECK (action IN ('buy', 'sell', 'dividend')),
+    shares NUMERIC(12,4) NOT NULL,
+    price NUMERIC(12,4) NOT NULL,
+    fees NUMERIC(8,2) DEFAULT 0,
+    notes TEXT,
+    created_at TIMESTAMP DEFAULT NOW()
+);
+
+CREATE TABLE positions (
+    id SERIAL PRIMARY KEY,
+    portfolio_id INTEGER NOT NULL REFERENCES portfolios(id),
+    ticker VARCHAR(10) NOT NULL REFERENCES companies(ticker),
+    shares NUMERIC(12,4) NOT NULL,
+    avg_cost NUMERIC(12,4) NOT NULL,
+    conviction VARCHAR(10) CHECK (conviction IN ('high', 'medium', 'low')),
+    position_type VARCHAR(10) DEFAULT 'long' CHECK (position_type IN ('long', 'short')),
+    opened_at DATE NOT NULL,
+    updated_at TIMESTAMP DEFAULT NOW(),
+    UNIQUE(portfolio_id, ticker)
+);
+
+CREATE TABLE portfolio_snapshots (
+    id SERIAL PRIMARY KEY,
+    portfolio_id INTEGER NOT NULL REFERENCES portfolios(id),
+    date DATE NOT NULL,
+    total_market_value NUMERIC(14,2),
+    total_cost_basis NUMERIC(14,2),
+    cash NUMERIC(14,2),
+    unrealized_pnl NUMERIC(14,2),
+    realized_pnl NUMERIC(14,2),
+    positions_json JSONB,
+    created_at TIMESTAMP DEFAULT NOW(),
+    UNIQUE(portfolio_id, date)
+);
+
+CREATE INDEX idx_transactions_portfolio ON transactions(portfolio_id, date);
+CREATE INDEX idx_transactions_ticker ON transactions(ticker);
+CREATE INDEX idx_positions_portfolio ON positions(portfolio_id);
+CREATE INDEX idx_snapshots_portfolio ON portfolio_snapshots(portfolio_id, date);

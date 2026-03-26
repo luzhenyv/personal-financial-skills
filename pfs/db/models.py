@@ -54,6 +54,7 @@ class Company(Base):
     sec_filings = relationship("SecFiling", back_populates="company")
     analysis_reports = relationship("AnalysisReport", back_populates="company")
     stock_splits = relationship("StockSplit", back_populates="company", order_by="StockSplit.split_date")
+    portfolio_positions = relationship("Position", back_populates="company")
 
 
 
@@ -347,3 +348,77 @@ class EtlRun(Base):
     stock_splits = Column(Integer, default=0)
     errors = Column(CompatibleJSON, default=list)
     run_metadata = Column("metadata", CompatibleJSON, default=dict)
+
+
+# ──────────────────────────────────────────────
+# PORTFOLIO (Mini PORT)
+# ──────────────────────────────────────────────
+
+
+class Portfolio(Base):
+    __tablename__ = "portfolios"
+
+    id = Column(Integer, primary_key=True)
+    name = Column(String(100), nullable=False, default="default")
+    cash = Column(Numeric(14, 2), nullable=False, default=100_000)
+    inception_date = Column(Date, nullable=False)
+    benchmark = Column(String(10), default="SPY")
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    transactions = relationship("Transaction", back_populates="portfolio")
+    positions = relationship("Position", back_populates="portfolio")
+    snapshots = relationship("PortfolioSnapshot", back_populates="portfolio")
+
+
+class Transaction(Base):
+    __tablename__ = "transactions"
+
+    id = Column(Integer, primary_key=True)
+    portfolio_id = Column(Integer, ForeignKey("portfolios.id"), nullable=False)
+    date = Column(Date, nullable=False)
+    ticker = Column(String(10), ForeignKey("companies.ticker"), nullable=False)
+    action = Column(String(10), nullable=False)  # buy, sell, dividend
+    shares = Column(Numeric(12, 4), nullable=False)
+    price = Column(Numeric(12, 4), nullable=False)
+    fees = Column(Numeric(8, 2), default=0)
+    notes = Column(Text)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    portfolio = relationship("Portfolio", back_populates="transactions")
+
+
+class Position(Base):
+    __tablename__ = "positions"
+    __table_args__ = (UniqueConstraint("portfolio_id", "ticker"),)
+
+    id = Column(Integer, primary_key=True)
+    portfolio_id = Column(Integer, ForeignKey("portfolios.id"), nullable=False)
+    ticker = Column(String(10), ForeignKey("companies.ticker"), nullable=False)
+    shares = Column(Numeric(12, 4), nullable=False)
+    avg_cost = Column(Numeric(12, 4), nullable=False)
+    conviction = Column(String(10))  # high, medium, low
+    position_type = Column(String(10), default="long")  # long, short
+    opened_at = Column(Date, nullable=False)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    portfolio = relationship("Portfolio", back_populates="positions")
+    company = relationship("Company", back_populates="portfolio_positions")
+
+
+class PortfolioSnapshot(Base):
+    __tablename__ = "portfolio_snapshots"
+    __table_args__ = (UniqueConstraint("portfolio_id", "date"),)
+
+    id = Column(Integer, primary_key=True)
+    portfolio_id = Column(Integer, ForeignKey("portfolios.id"), nullable=False)
+    date = Column(Date, nullable=False)
+    total_market_value = Column(Numeric(14, 2))
+    total_cost_basis = Column(Numeric(14, 2))
+    cash = Column(Numeric(14, 2))
+    unrealized_pnl = Column(Numeric(14, 2))
+    realized_pnl = Column(Numeric(14, 2))
+    positions_json = Column(CompatibleJSON)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    portfolio = relationship("Portfolio", back_populates="snapshots")

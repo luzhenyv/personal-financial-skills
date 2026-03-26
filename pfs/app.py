@@ -3,7 +3,7 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from pfs.api.routers import companies, etl, filings, financials, analysis, tasks
+from pfs.api.routers import companies, etl, filings, financials, analysis, portfolio, tasks
 from pfs.config import settings
 
 app = FastAPI(title="Personal Finance API", version="1.0.0")
@@ -23,6 +23,7 @@ app.include_router(companies.router)
 app.include_router(financials.router)
 app.include_router(filings.router)
 app.include_router(analysis.router)
+app.include_router(portfolio.router)
 app.include_router(tasks.router)
 
 
