@@ -7,7 +7,6 @@ FastAPI's `app.dependency_overrides` mechanism.
 
 from __future__ import annotations
 
-import io
 from datetime import date
 from typing import Any
 from unittest.mock import MagicMock, patch
@@ -16,7 +15,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from pfs.api.app import app
-from pfs.db.session import get_db
+from pfs.api.deps import get_db
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -315,7 +314,7 @@ def test_ingest_trigger(client_with_db):
 
     app.dependency_overrides[get_db] = _db_gen
 
-    with patch("pfs.api.routers.etl.threading.Thread") as mock_thread:
+    with patch("pfs.services.etl.threading.Thread") as mock_thread:
         mock_thread.return_value = MagicMock()
         resp = tc.post("/api/etl/ingest", json={"ticker": "nvda"})
 
@@ -484,10 +483,10 @@ def test_get_filing_content_local(filings_client):
     mock_path = MagicMock()
     mock_path.exists.return_value = True
     mock_path.name = "10-K_2024_01.htm"
+    mock_path.read_bytes.return_value = html_bytes
 
-    with patch("pfs.api.routers.filings._local_filing_path", return_value=mock_path):
-        with patch("builtins.open", return_value=io.BytesIO(html_bytes)):
-            resp = tc.get("/api/filings/NVDA/1/content")
+    with patch("pfs.services.filings._local_filing_path", return_value=mock_path):
+        resp = tc.get("/api/filings/NVDA/1/content")
 
     assert resp.status_code == 200
     assert b"10-K content" in resp.content

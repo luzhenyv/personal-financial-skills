@@ -2,41 +2,14 @@
 
 from __future__ import annotations
 
-from typing import Any
-
 from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 
-from pfs.config import settings
-from pfs.db.models import Company, SecFiling
-from pfs.db.session import get_db
+from pfs.api.deps import get_db
+from pfs.services import filings as filing_svc
 
 router = APIRouter(prefix="/api/filings", tags=["filings"])
-
-
-def _row_to_dict(obj) -> dict[str, Any]:
-    result = {}
-    for col in obj.__table__.columns:
-        val = getattr(obj, col.name)
-        result[col.name] = val
-    return result
-
-
-def _require_company(db: Session, ticker: str) -> None:
-    exists = db.query(Company).filter(Company.ticker == ticker.upper()).first()
-    if not exists:
-        raise HTTPException(status_code=404, detail=f"Company '{ticker}' not found")
-
-
-def _local_filing_path(ticker: str, filing: SecFiling):
-    """Reconstruct the local file path for a downloaded filing."""
-    if not filing.filing_type or not filing.reporting_date:
-        return None
-    report_date = filing.reporting_date.strftime("%Y_%m")
-    form = filing.filing_type.replace("/", "-")
-    filename = f"{form}_{report_date}.htm"
-    return settings.raw_dir / ticker / filename
 
 
 @router.get("/{ticker}")
@@ -46,37 +19,19 @@ def list_filings(
     db: Session = Depends(get_db),
 ):
     """List SEC filings for a company."""
-    ticker = ticker.upper()
-    _require_company(db, ticker)
-    q = db.query(SecFiling).filter(SecFiling.ticker == ticker)
-    if form_type:
-        q = q.filter(SecFiling.filing_type == form_type)
-    rows = q.order_by(SecFiling.filing_date.desc()).all()
-
-    results = []
-    for r in rows:
-        d = _row_to_dict(r)
-        local = _local_filing_path(ticker, r)
-        d["local_path"] = str(local) if local and local.exists() else None
-        results.append(d)
-    return results
+    try:
+        return filing_svc.list_filings(db, ticker, form_type=form_type)
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
 
 
 @router.get("/{ticker}/{filing_id}")
 def get_filing(ticker: str, filing_id: int, db: Session = Depends(get_db)):
     """Get a single SEC filing by ID."""
-    ticker = ticker.upper()
-    row = (
-        db.query(SecFiling)
-        .filter(SecFiling.id == filing_id, SecFiling.ticker == ticker)
-        .first()
-    )
-    if not row:
+    result = filing_svc.get_filing(db, ticker, filing_id)
+    if not result:
         raise HTTPException(status_code=404, detail="Filing not found")
-    d = _row_to_dict(row)
-    local = _local_filing_path(ticker, row)
-    d["local_path"] = str(local) if local and local.exists() else None
-    return d
+    return result
 
 
 @router.get("/{ticker}/{filing_id}/content")
@@ -87,35 +42,16 @@ def get_filing_content(ticker: str, filing_id: int, db: Session = Depends(get_db
     2. Fallback: proxy from SEC EDGAR via primary_doc_url
     3. 404 if neither available
     """
-    ticker = ticker.upper()
-    row = (
-        db.query(SecFiling)
-        .filter(SecFiling.id == filing_id, SecFiling.ticker == ticker)
-        .first()
+    try:
+        result = filing_svc.get_filing_content(db, ticker, filing_id)
+    except RuntimeError:
+        raise HTTPException(status_code=502, detail="Failed to fetch from SEC EDGAR")
+
+    if result is None:
+        raise HTTPException(status_code=404, detail="Filing content not available")
+
+    media_type, content = result
+    return StreamingResponse(
+        iter([content]),
+        media_type=media_type,
     )
-    if not row:
-        raise HTTPException(status_code=404, detail="Filing not found")
-
-    # 1. Local file
-    local = _local_filing_path(ticker, row)
-    if local and local.exists():
-        return StreamingResponse(
-            open(local, "rb"),  # noqa: SIM115
-            media_type="text/html",
-            headers={"Content-Disposition": f'inline; filename="{local.name}"'},
-        )
-
-    # 2. SEC EDGAR proxy
-    if row.primary_doc_url:
-        from pfs.etl.sec_client import _request_with_retry
-
-        try:
-            resp = _request_with_retry(row.primary_doc_url, timeout=90)
-            return StreamingResponse(
-                iter([resp.content]),
-                media_type="text/html",
-            )
-        except Exception:
-            raise HTTPException(status_code=502, detail="Failed to fetch from SEC EDGAR")
-
-    raise HTTPException(status_code=404, detail="Filing content not available")
