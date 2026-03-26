@@ -93,7 +93,7 @@ def load_company_page_data(ticker: str) -> CompanyPageData | None:
     )
 
     # ── Split-adjust per-share metrics to current share basis ──
-    from pfs.splits import get_split_adjustor
+    from pfs.services.splits import get_split_adjustor
     from pfs.db.session import get_session
 
     fye = company.get("fiscal_year_end")  # e.g. "0131"

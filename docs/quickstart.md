@@ -68,7 +68,7 @@ This will:
 Via Python:
 
 ```python
-from pfs.analysis.company_profile import generate_tearsheet
+from pfs.services.analysis import generate_tearsheet
 
 md = generate_tearsheet("NVDA")
 print(md)

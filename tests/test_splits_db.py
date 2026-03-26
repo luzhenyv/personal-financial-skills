@@ -4,7 +4,7 @@ import pytest
 from datetime import date
 
 from pfs.db.session import get_session
-from pfs.splits import cumulative_split_factor, get_split_adjustor, load_splits_from_db
+from pfs.services.splits import cumulative_split_factor, get_split_adjustor, load_splits_from_db
 
 
 @pytest.fixture(scope="module")

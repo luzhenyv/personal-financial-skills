@@ -283,7 +283,7 @@ def get_annual_financials(ticker: str, years: int = 5) -> dict[str, Any]:
     """
     from sqlalchemy import text as sa_text
 
-    from pfs.splits import get_split_adjustor
+    from pfs.services.splits import get_split_adjustor
 
     session = _get_session()
     try:

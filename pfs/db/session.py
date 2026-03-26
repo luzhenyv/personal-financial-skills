@@ -31,9 +31,8 @@ SessionLocal = sessionmaker(bind=engine, autocommit=False, autoflush=False)
 def get_db() -> Generator[Session, None, None]:
     """Yield a database session for FastAPI dependency injection.
 
-    .. deprecated::
-        Prefer importing from ``pfs.api.deps`` for new code.
-        This re-export exists for backward compatibility.
+    Note: FastAPI routers should use ``pfs.api.deps.get_db`` instead.
+    This function is kept for non-FastAPI callers.
     """
     db = SessionLocal()
     try:

@@ -45,7 +45,7 @@ def fetch_from_api(ticker: str, peers: str | None, refresh: bool) -> dict | None
 
 def fetch_direct(ticker: str, peers_csv: str | None) -> dict:
     """Fallback: call pfs.analysis.comps directly (requires yfinance)."""
-    from pfs.analysis.comps import build_comps
+    from pfs.services.comps import build_comps
 
     peers_list = [p.strip().upper() for p in peers_csv.split(",") if p.strip()] if peers_csv else None
     return build_comps(ticker, peers_override=peers_list, force_refresh=True)
