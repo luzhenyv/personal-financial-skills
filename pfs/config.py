@@ -2,27 +2,30 @@
 
 from pathlib import Path
 
+from dotenv import load_dotenv
 from pydantic_settings import BaseSettings
+
+load_dotenv()
 
 
 class Settings(BaseSettings):
     """Application settings from .env file or environment."""
 
     # Database
-    database_url: str = "postgresql://pfs:pfs_dev_2024@localhost:5432/personal_finance"
+    database_url: str = "sqlite:///./data/personal_finance.db"
     sqlite_database_path: Path = Path("./data/personal_finance.db")
 
     # SEC EDGAR
-    sec_user_agent: str = "PersonalFinanceApp your_email@example.com"
+    sec_user_agent: str = ""  # required — set in .env
     sec_base_url: str = "https://data.sec.gov"
     sec_rate_limit: float = 0.12  # seconds between requests (max 10/sec)
 
     # Alpha Vantage
-    alpha_vantage_key: str = ""
+    alpha_vantage_key: str = ""  # set in .env
     alpha_vantage_base_url: str = "https://www.alphavantage.co/query"
 
     # FRED
-    fred_api_key: str = ""
+    fred_api_key: str = ""  # set in .env
 
     # Paths
     data_dir: Path = Path("./data")
@@ -31,7 +34,7 @@ class Settings(BaseSettings):
     log_level: str = "INFO"
     cors_origins: str = "http://localhost:8501"
 
-    model_config = {"env_file": ".env", "env_file_encoding": "utf-8", "extra": "ignore"}
+    model_config = {"extra": "ignore"}
 
     @property
     def raw_dir(self) -> Path:

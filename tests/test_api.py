@@ -14,7 +14,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 from fastapi.testclient import TestClient
 
-from pfs.api.app import app
+from pfs.app import app
 from pfs.api.deps import get_db
 
 
