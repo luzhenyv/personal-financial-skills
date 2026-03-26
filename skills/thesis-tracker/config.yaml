@@ -13,11 +13,11 @@ triggers:
     action: check --all
 
 inputs:
-  mcp_tools:
-    - get_company
-    - get_financial_metrics
-    - get_income_statements
-    - get_prices
+  api_endpoints:
+    - GET /api/companies/{ticker}
+    - GET /api/financials/{ticker}/metrics
+    - GET /api/financials/{ticker}/income-statements?years=3
+    - GET /api/financials/{ticker}/prices?period=3mo
   artifacts:
     - "{ticker}/profile/profile.json"
 

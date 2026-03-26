@@ -76,22 +76,23 @@ The skill works but has structural gaps that will compound as we add more skills
 
 The best-structured skill. Minimal changes needed, mostly extensions.
 
-| Issue | What to do | Priority |
-|-------|-----------|----------|
-| **Inline `thesis_io.py`** | Move `skills/_lib/thesis_io.py` → `skills/thesis-tracker/scripts/thesis_io.py`. Update imports in `thesis_cli.py` | P0 |
-| **Inline `artifact_io.py`** | Copy `skills/_lib/artifact_io.py` → `skills/thesis-tracker/scripts/artifact_io.py` if used | P0 |
-| **Assumption weights not validated** | Add validation in `thesis_cli.py create` that weights sum to 1.0 (or auto-normalize) | P1 |
-| **Subjective score always 50 in CLI** | Design a structured prompt template for the agent to produce real subjective scores. Store the prompt in `references/health-check-prompt.md` | P1 |
-| **Catalyst resolution doesn't auto-trigger update** | When resolving a catalyst via `catalyst --resolve`, auto-prompt for update flow (or create a task in the queue) | P2 |
-| **No portfolio integration point** | Add `position_size`, `entry_price`, `current_pnl` fields to `thesis.json` (optional fields). The upcoming portfolio skill will populate these | P2 |
-| **Health check `--all` has no summary view** | Generate a portfolio-wide health summary markdown when running `check --all` | P2 |
-| **Remove MCP references** | Update `config.yaml`: replace `mcp_tools` with `api_endpoints` | P0 |
+| Issue | What to do | Priority | Status |
+|-------|-----------|----------|--------|
+| **Inline `thesis_io.py`** | Move `skills/_lib/thesis_io.py` → `skills/thesis-tracker/scripts/thesis_io.py`. Update imports in `thesis_cli.py` | P0 | ✅ Done |
+| **Inline `artifact_io.py`** | Copy `skills/_lib/artifact_io.py` → `skills/thesis-tracker/scripts/artifact_io.py` if used | P0 | ✅ Done |
+| **Assumption weights not validated** | Add validation in `thesis_cli.py create` that weights sum to 1.0 (or auto-normalize) | P1 | ✅ Done — `_normalize_weights()` added to `thesis_cli.py` |
+| **Subjective score always 50 in CLI** | Design a structured prompt template for the agent to produce real subjective scores. Store the prompt in `references/health-check-prompt.md` | P1 | ✅ Done — `references/health-check-prompt.md` created |
+| **Catalyst resolution doesn't auto-trigger update** | When resolving a catalyst via `catalyst --resolve`, auto-prompt for update flow (or create a task in the queue) | P2 | ⏭️ Skipped |
+| **No portfolio integration point** | Add `position_size`, `entry_price`, `current_pnl` fields to `thesis.json` (optional fields). The upcoming portfolio skill will populate these | P2 | ⏭️ Skipped |
+| **Health check `--all` has no summary view** | Generate a portfolio-wide health summary markdown when running `check --all` | P2 | ⏭️ Skipped |
+| **Remove MCP references** | Update `config.yaml`: replace `mcp_tools` with `api_endpoints` | P0 | ✅ Done |
+| **Simplify SKILL.md** | Rewrite SKILL.md to match reference style from financial-services-plugins (workflow steps, not task-oriented CLI docs) | P0 | ✅ Done |
 
 ### 1.3 etl-coverage — Light Refactor
 
-| Issue | What to do | Priority |
-|-------|-----------|----------|
-| **Remove MCP references** | Update `config.yaml`: replace `mcp_tools` with `api_endpoints` | P0 |
+| Issue | What to do | Priority | Status |
+|-------|-----------|----------|--------|
+| **Remove MCP references** | Update `config.yaml`: replace `mcp_tools` with `api_endpoints` | P0 | ✅ Done |
 
 ---
 

@@ -7,11 +7,11 @@ triggers:
     action: check --all
 
 inputs:
-  mcp_tools:
-    - list_companies
-    - get_company
-    - get_income_statements
-    - get_balance_sheets
+  api_endpoints:
+    - GET /api/companies/
+    - GET /api/companies/{ticker}
+    - GET /api/financials/{ticker}/income-statements?years=5
+    - GET /api/financials/{ticker}/balance-sheets?years=5
   artifacts: []
 
 outputs:

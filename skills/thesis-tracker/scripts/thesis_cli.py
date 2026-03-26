@@ -164,6 +164,25 @@ def _interactive_create(ticker: str) -> dict:
     }
 
 
+def _normalize_weights(assumptions: list[dict]) -> list[dict]:
+    """Ensure assumption weights sum to 1.0, auto-normalizing if needed."""
+    if not assumptions:
+        return assumptions
+    total = sum(float(a.get("weight", 0)) for a in assumptions if isinstance(a, dict))
+    if total == 0:
+        # Equal weights if none specified
+        even = round(1.0 / len(assumptions), 4)
+        for a in assumptions:
+            if isinstance(a, dict):
+                a["weight"] = even
+    elif abs(total - 1.0) > 0.001:
+        print(f"  ⚠️  Weights sum to {total:.1%}, auto-normalizing to 100%")
+        for a in assumptions:
+            if isinstance(a, dict) and a.get("weight"):
+                a["weight"] = round(float(a["weight"]) / total, 4)
+    return assumptions
+
+
 def cmd_create(args: argparse.Namespace) -> None:
     ticker = args.ticker.upper()
 
@@ -199,6 +218,9 @@ def cmd_create(args: argparse.Namespace) -> None:
     else:
         print("Error: provide --thesis, --interactive, --from-profile, or --from-json")
         sys.exit(1)
+
+    if data.get("assumptions"):
+        data["assumptions"] = _normalize_weights(data["assumptions"])
 
     from thesis_io import create_thesis
 
