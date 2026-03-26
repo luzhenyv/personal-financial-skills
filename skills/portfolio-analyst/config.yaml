@@ -1,0 +1,29 @@
+name: portfolio-analyst
+version: "1.0"
+description: "AI portfolio review and rebalancing recommendations"
+
+triggers:
+  - cron: "0 17 * * 5"    # Weekly Friday after close
+    action: review
+  - event: task_request
+    action: review
+
+inputs:
+  api_endpoints:
+    - GET /api/portfolio/
+    - GET /api/portfolio/positions
+    - GET /api/portfolio/allocation
+    - GET /api/portfolio/performance
+    - GET /api/portfolio/pnl
+  artifacts:
+    - "{ticker}/thesis/thesis.json"
+    - "{ticker}/thesis/health_checks.json"
+
+outputs:
+  path: "data/artifacts/_portfolio/analysis/"
+  files:
+    - portfolio_snapshot.json
+    - portfolio_review.json
+    - portfolio_review.md
+
+requires_intelligence: true
