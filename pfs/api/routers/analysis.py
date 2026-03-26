@@ -42,14 +42,6 @@ def get_valuation(
     return asdict(result)
 
 
-@router.get("/coverage/{ticker}")
-def get_coverage(ticker: str):
-    """Run ETL coverage analysis for a single company."""
-    from skills.etl_coverage.scripts.check_coverage import analyze_company
-
-    return analyze_company(ticker.upper())
-
-
 @router.get("/comps/{ticker}")
 def get_comps(
     ticker: str,
