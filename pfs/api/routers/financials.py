@@ -91,3 +91,16 @@ def get_segments(
         return fin_svc.get_segments(db, ticker, fiscal_year=fiscal_year)
     except ValueError as e:
         _handle_value_error(e)
+
+
+@router.get("/{ticker}/quarterly")
+def get_quarterly(
+    ticker: str,
+    quarters: int = Query(8, ge=1, le=40),
+    db: Session = Depends(get_db),
+):
+    """Return combined quarterly financials (income + balance sheet + cash flow)."""
+    try:
+        return fin_svc.get_quarterly(db, ticker, quarters=quarters)
+    except ValueError as e:
+        _handle_value_error(e)

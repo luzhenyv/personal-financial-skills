@@ -11,6 +11,7 @@ from dataclasses import asdict
 
 from fastapi import APIRouter, Query
 from fastapi.responses import JSONResponse
+from pydantic import BaseModel
 
 router = APIRouter(prefix="/api/analysis", tags=["analysis"])
 
@@ -92,3 +93,53 @@ def generate_report(
 
     md = generate_investment_report(ticker.upper(), save=True, **kwargs)
     return {"ticker": ticker.upper(), "markdown": md}
+
+
+class ReportUpsert(BaseModel):
+    ticker: str
+    report_type: str
+    title: str | None = None
+    content_md: str
+    file_path: str | None = None
+    generated_by: str = "agent"
+
+
+@router.post("/reports")
+def upsert_report(body: ReportUpsert):
+    """Upsert an analysis report into the database.
+
+    If a report with the same ticker + report_type already exists, it is
+    updated.  Otherwise a new row is created.
+    """
+    from pfs.api.deps import get_db as _get_db_gen
+    from pfs.db.models import AnalysisReport
+
+    db = next(_get_db_gen())
+    try:
+        existing = (
+            db.query(AnalysisReport)
+            .filter(
+                AnalysisReport.ticker == body.ticker.upper(),
+                AnalysisReport.report_type == body.report_type,
+            )
+            .first()
+        )
+        if existing:
+            existing.title = body.title
+            existing.content_md = body.content_md
+            existing.file_path = body.file_path
+            existing.generated_by = body.generated_by
+        else:
+            row = AnalysisReport(
+                ticker=body.ticker.upper(),
+                report_type=body.report_type,
+                title=body.title,
+                content_md=body.content_md,
+                file_path=body.file_path,
+                generated_by=body.generated_by,
+            )
+            db.add(row)
+        db.commit()
+        return {"status": "ok", "ticker": body.ticker.upper(), "report_type": body.report_type}
+    finally:
+        db.close()

@@ -43,6 +43,7 @@ The REST API (`$PFS_API_URL`, default `http://localhost:8000`) provides read-onl
 | `GET /api/financials/{TICKER}/prices?period=1y` | Daily OHLCV price data |
 | `GET /api/financials/{TICKER}/segments` | Revenue by product/geography/channel |
 | `GET /api/financials/{TICKER}/stock-splits` | Stock split history |
+| `GET /api/financials/{TICKER}/quarterly?quarters=8` | Combined quarterly financials (income + balance sheet + cash flow) |
 | `GET /api/financials/{TICKER}/annual?years=5` | Combined financials with split-adjusted EPS |
 | `GET /api/filings/{TICKER}/` | SEC filing metadata |
 | `GET /api/filings/{TICKER}/{ID}/content` | Raw HTML content of a SEC filing |
@@ -69,6 +70,7 @@ Skills live in `skills/`. Each skill has a `SKILL.md` with detailed instructions
 | `company-profile` | REST API data + 10-K text | `data/artifacts/{ticker}/profile/` |
 | `etl-coverage` | DB queries + XBRL cache | `data/artifacts/_etl/coverage_report.json` |
 | `thesis-tracker` | User thesis + REST API data | `data/artifacts/{ticker}/thesis/` + DB |
+| `earnings-analysis` | REST API quarterly data + thesis | `data/artifacts/{ticker}/earnings/` |
 
 ## Artifact Output Convention
 
@@ -77,9 +79,9 @@ All analysis artifacts go into subfolders under `data/artifacts/{ticker}/`:
 ```
 data/artifacts/{ticker}/
   profile/          ← company-profile skill output (JSON + markdown)
-  thesis/           ← investment-thesis skill output (versioned markdown)
-  earnings/         ← earnings-analysis skill output
-  news/             ← news-monitor skill output
+  thesis/           ← thesis-tracker skill output (versioned markdown)
+  earnings/         ← earnings-analysis skill output (Q*_YYYY.json + Q*_YYYY_analysis.md)
+  news/             ← news-monitor skill output (future)
 ```
 
 Every JSON artifact must include a `"schema_version": "1.0"` field. Markdown reports are human-readable and rendered in Streamlit.
@@ -118,6 +120,10 @@ uv run python skills/thesis-tracker/scripts/thesis_cli.py update  {TICKER} --int
 uv run python skills/thesis-tracker/scripts/thesis_cli.py check   {TICKER}
 uv run python skills/thesis-tracker/scripts/thesis_cli.py catalyst {TICKER} --add
 uv run python skills/thesis-tracker/scripts/thesis_cli.py report  {TICKER}
+
+# Earnings analysis workflow
+uv run python skills/earnings-analysis/scripts/collect_earnings.py {TICKER}
+uv run python skills/earnings-analysis/scripts/generate_earnings_report.py {TICKER} [--persist]
 
 # Section extraction (run after ETL)
 uv run python -m pfs.etl.section_extractor {TICKER}

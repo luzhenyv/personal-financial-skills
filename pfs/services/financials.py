@@ -138,3 +138,57 @@ def get_stock_splits(db: Session, ticker: str) -> list[dict[str, Any]]:
         .all()
     )
     return [_row_to_dict(r) for r in rows]
+
+
+def get_quarterly(
+    db: Session,
+    ticker: str,
+    *,
+    quarters: int = 8,
+) -> list[dict[str, Any]]:
+    """Return combined quarterly financials (income + balance sheet + cash flow).
+
+    Each result dict merges the three statements for the same (fiscal_year, fiscal_quarter).
+    Only rows with a non-null fiscal_quarter are included.
+    """
+    ticker = ticker.upper()
+    require_company(db, ticker)
+
+    income_rows = (
+        db.query(IncomeStatement)
+        .filter(IncomeStatement.ticker == ticker, IncomeStatement.fiscal_quarter.isnot(None))
+        .order_by(IncomeStatement.fiscal_year.desc(), IncomeStatement.fiscal_quarter.desc())
+        .limit(quarters)
+        .all()
+    )
+
+    # Build lookup key → dict for balance sheets and cash flows
+    bs_rows = (
+        db.query(BalanceSheet)
+        .filter(BalanceSheet.ticker == ticker, BalanceSheet.fiscal_quarter.isnot(None))
+        .order_by(BalanceSheet.fiscal_year.desc(), BalanceSheet.fiscal_quarter.desc())
+        .limit(quarters)
+        .all()
+    )
+    cf_rows = (
+        db.query(CashFlowStatement)
+        .filter(CashFlowStatement.ticker == ticker, CashFlowStatement.fiscal_quarter.isnot(None))
+        .order_by(CashFlowStatement.fiscal_year.desc(), CashFlowStatement.fiscal_quarter.desc())
+        .limit(quarters)
+        .all()
+    )
+
+    bs_map = {(r.fiscal_year, r.fiscal_quarter): _row_to_dict(r) for r in bs_rows}
+    cf_map = {(r.fiscal_year, r.fiscal_quarter): _row_to_dict(r) for r in cf_rows}
+
+    results = []
+    for inc in reversed(income_rows):
+        key = (inc.fiscal_year, inc.fiscal_quarter)
+        merged: dict[str, Any] = {"source_type": "quarterly"}
+        merged.update(_row_to_dict(inc))
+        if key in bs_map:
+            merged["balance_sheet"] = bs_map[key]
+        if key in cf_map:
+            merged["cash_flow"] = cf_map[key]
+        results.append(merged)
+    return results

@@ -25,6 +25,7 @@ Read-only access to the database (`$PFS_API_URL`, default `http://localhost:8000
 - `GET /api/financials/{TICKER}/prices?period=1y` — daily OHLCV
 - `GET /api/financials/{TICKER}/segments` — segment breakdown
 - `GET /api/financials/{TICKER}/stock-splits` — stock split history
+- `GET /api/financials/{TICKER}/quarterly?quarters=8` — combined quarterly financials
 - `GET /api/financials/{TICKER}/annual?years=5` — combined financials with split-adjusted EPS
 - `GET /api/filings/{TICKER}/` — SEC filing metadata
 - `GET /api/filings/{TICKER}/{ID}/content` — raw filing HTML
@@ -45,6 +46,7 @@ Read `SKILL.md` inside each skill directory before executing:
 | `skills/company-profile/` | `data/artifacts/{ticker}/profile/` |
 | `skills/etl-coverage/` | `data/artifacts/_etl/` |
 | `skills/thesis-tracker/` | `data/artifacts/{ticker}/thesis/` + DB |
+| `skills/earnings-analysis/` | `data/artifacts/{ticker}/earnings/` |
 
 ## Artifact Convention
 
@@ -77,6 +79,10 @@ uv run python skills/thesis-tracker/scripts/thesis_cli.py update  {TICKER} --int
 uv run python skills/thesis-tracker/scripts/thesis_cli.py check   {TICKER}
 uv run python skills/thesis-tracker/scripts/thesis_cli.py catalyst {TICKER} --add
 uv run python skills/thesis-tracker/scripts/thesis_cli.py report  {TICKER}
+
+# Earnings analysis workflow
+uv run python skills/earnings-analysis/scripts/collect_earnings.py {TICKER}
+uv run python skills/earnings-analysis/scripts/generate_earnings_report.py {TICKER} [--persist]
 
 # Section extraction
 uv run python -m pfs.etl.section_extractor {TICKER}

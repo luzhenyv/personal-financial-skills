@@ -380,7 +380,7 @@ data/artifacts/{ticker}/earnings/
 - `GET /api/filings/{ticker}/?form_type=10-Q` — latest quarterly filing
 - `GET /api/financials/{ticker}/income-statements?years=2` — compare QoQ / YoY
 - `GET /api/financials/{ticker}/metrics` — margin trends
-- `GET /api/financials/{ticker}/quarterly?quarters=8` — quarterly breakdown *(new endpoint)*
+- `GET /api/financials/{ticker}/quarterly?quarters=8` — quarterly breakdown ✅ **implemented**
 
 **Skill scripts (thin, API-driven):**
 - `scripts/collect_earnings.py` — calls REST API endpoints, writes raw JSON to artifacts

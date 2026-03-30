@@ -15,7 +15,7 @@ Bridgewater's edge is radical transparency, systematic decision-making, and a te
 | Source | What we took |
 |--------|-------------|
 | **Ray Dalio / Bridgewater** | Systematic principles-based investing, radical transparency, machine-driven decisions |
-| **Anthropic's equity-research plugin** | Skill-based architecture for equity research workflows (initiating coverage, earnings analysis, thesis tracking, etc.) — [github.com/anthropics/financial-services-plugins](https://github.com/anthropics/financial-services-plugins) |
+| **Anthropic's financial-services plugins** | Skill-based architecture for equity research workflows (initiating coverage, earnings analysis, thesis tracking, etc.) — [github.com/anthropics/financial-services-plugins](https://github.com/anthropics/financial-services-plugins) |
 | **TradingAgents (paper)** | Multi-agent LLM trading framework — specialized analyst roles (fundamentals, sentiment, news, technicals), risk management agent, fund manager agent combining signals into trading decisions, [GitHub](https://github.com/TauricResearch/TradingAgents) |
 | **Mini Bloomberg (self-built)** | The data plane — ETL from SEC EDGAR + yfinance + Alpha Vantage into a structured PostgreSQL database, served by a FastAPI REST API |
 
