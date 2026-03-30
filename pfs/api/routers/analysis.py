@@ -9,9 +9,12 @@ from __future__ import annotations
 
 from dataclasses import asdict
 
-from fastapi import APIRouter, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
+from sqlalchemy.orm import Session
+
+from pfs.api.deps import get_db
 
 router = APIRouter(prefix="/api/analysis", tags=["analysis"])
 
@@ -143,3 +146,35 @@ def upsert_report(body: ReportUpsert):
         return {"status": "ok", "ticker": body.ticker.upper(), "report_type": body.report_type}
     finally:
         db.close()
+
+
+# ── Risk Analytics ───────────────────────────────────────────
+
+
+@router.post("/risk/portfolio")
+def compute_portfolio_risk(
+    portfolio_id: int = Query(1, ge=1),
+    benchmark: str = Query("SPY"),
+    lookback_days: int = Query(252, ge=30, le=756),
+    db: Session = Depends(get_db),
+):
+    """Compute portfolio-level risk: beta, VaR, Sharpe, Sortino, drawdown, correlation."""
+    from pfs.services.risk import portfolio_risk
+
+    try:
+        return portfolio_risk(db, portfolio_id, benchmark=benchmark, lookback_days=lookback_days)
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+
+
+@router.get("/risk/{ticker}")
+def compute_ticker_risk(
+    ticker: str,
+    benchmark: str = Query("SPY"),
+    lookback_days: int = Query(252, ge=30, le=756),
+    db: Session = Depends(get_db),
+):
+    """Per-ticker risk metrics: beta, volatility, correlation, Sharpe, drawdown."""
+    from pfs.services.risk import ticker_risk
+
+    return ticker_risk(db, ticker.upper(), benchmark=benchmark, lookback_days=lookback_days)

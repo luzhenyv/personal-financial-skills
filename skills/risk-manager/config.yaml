@@ -1,0 +1,23 @@
+name: risk-manager
+description: Portfolio-level risk monitoring — concentration, drawdown, alerts
+triggers:
+  - schedule: "0 18 * * 1-5"  # Every weekday at 6 PM
+  - manual: "risk check"
+  - manual: "portfolio risk"
+  - manual: "risk report"
+
+inputs:
+  api:
+    - GET /api/portfolio/positions
+    - GET /api/portfolio/allocation
+    - POST /api/analysis/risk/portfolio
+    - GET /api/analysis/risk/{ticker}
+  artifacts:
+    - data/artifacts/{ticker}/thesis/thesis.json
+    - data/artifacts/{ticker}/thesis/health_checks.json
+
+outputs:
+  - data/artifacts/_portfolio/risk/risk_report.json
+  - data/artifacts/_portfolio/risk/risk_report.md
+  - data/artifacts/_portfolio/risk/alerts.json
+  - data/artifacts/_portfolio/risk/rules.json

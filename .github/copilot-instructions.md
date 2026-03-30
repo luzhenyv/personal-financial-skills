@@ -30,6 +30,8 @@ Read-only access to the database (`$PFS_API_URL`, default `http://localhost:8000
 - `GET /api/filings/{TICKER}/` — SEC filing metadata
 - `GET /api/filings/{TICKER}/{ID}/content` — raw filing HTML
 - `POST /api/analysis/reports` — upsert report to DB
+- `POST /api/analysis/risk/portfolio` — portfolio-level risk metrics (beta, VaR, Sharpe, Sortino, drawdown)
+- `GET /api/analysis/risk/{TICKER}` — per-ticker risk contribution
 
 ## Data Source Priority
 
@@ -47,6 +49,7 @@ Read `SKILL.md` inside each skill directory before executing:
 | `skills/etl-coverage/` | `data/artifacts/_etl/` |
 | `skills/thesis-tracker/` | `data/artifacts/{ticker}/thesis/` + DB |
 | `skills/earnings-analysis/` | `data/artifacts/{ticker}/earnings/` |
+| `skills/risk-manager/` | `data/artifacts/_portfolio/risk/` |
 
 ## Artifact Convention
 
@@ -83,6 +86,12 @@ uv run python skills/thesis-tracker/scripts/thesis_cli.py report  {TICKER}
 # Earnings analysis workflow
 uv run python skills/earnings-analysis/scripts/collect_earnings.py {TICKER}
 uv run python skills/earnings-analysis/scripts/generate_earnings_report.py {TICKER} [--persist]
+
+# Risk management workflow
+uv run python skills/risk-manager/scripts/risk_cli.py check             # Full risk report
+uv run python skills/risk-manager/scripts/risk_cli.py alerts            # Current active alerts
+uv run python skills/risk-manager/scripts/risk_cli.py rules             # Show/edit risk rules
+uv run python skills/risk-manager/scripts/risk_cli.py report            # Generate markdown report
 
 # Section extraction
 uv run python -m pfs.etl.section_extractor {TICKER}

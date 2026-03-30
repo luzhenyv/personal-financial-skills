@@ -48,6 +48,8 @@ The REST API (`$PFS_API_URL`, default `http://localhost:8000`) provides read-onl
 | `GET /api/filings/{TICKER}/` | SEC filing metadata |
 | `GET /api/filings/{TICKER}/{ID}/content` | Raw HTML content of a SEC filing |
 | `POST /api/analysis/reports` | Upsert an analysis report into the DB |
+| `POST /api/analysis/risk/portfolio` | Portfolio-level risk metrics (beta, VaR, Sharpe, Sortino, drawdown) |
+| `GET /api/analysis/risk/{TICKER}` | Per-ticker risk contribution (beta, volatility, correlation) |
 
 ## Data Source Fallback Chain
 
@@ -71,6 +73,7 @@ Skills live in `skills/`. Each skill has a `SKILL.md` with detailed instructions
 | `etl-coverage` | DB queries + XBRL cache | `data/artifacts/_etl/coverage_report.json` |
 | `thesis-tracker` | User thesis + REST API data | `data/artifacts/{ticker}/thesis/` + DB |
 | `earnings-analysis` | REST API quarterly data + thesis | `data/artifacts/{ticker}/earnings/` |
+| `risk-manager` | Portfolio API + thesis artifacts | `data/artifacts/_portfolio/risk/` |
 
 ## Artifact Output Convention
 
@@ -124,6 +127,12 @@ uv run python skills/thesis-tracker/scripts/thesis_cli.py report  {TICKER}
 # Earnings analysis workflow
 uv run python skills/earnings-analysis/scripts/collect_earnings.py {TICKER}
 uv run python skills/earnings-analysis/scripts/generate_earnings_report.py {TICKER} [--persist]
+
+# Risk management workflow
+uv run python skills/risk-manager/scripts/risk_cli.py check             # Full risk report
+uv run python skills/risk-manager/scripts/risk_cli.py alerts            # Current active alerts
+uv run python skills/risk-manager/scripts/risk_cli.py rules             # Show/edit risk rules
+uv run python skills/risk-manager/scripts/risk_cli.py report            # Generate markdown report
 
 # Section extraction (run after ETL)
 uv run python -m pfs.etl.section_extractor {TICKER}
