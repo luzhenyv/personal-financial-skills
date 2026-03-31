@@ -1,0 +1,21 @@
+name: idea-generation
+description: Systematic stock screening — surface new investment ideas from the database
+triggers:
+  - manual: "screen for"
+  - manual: "find ideas"
+  - manual: "idea generation"
+  - manual: "stock screen"
+  - manual: "new ideas"
+
+inputs:
+  api:
+    - GET /api/companies/
+    - GET /api/financials/{ticker}/metrics
+    - GET /api/financials/{ticker}/income-statements
+    - GET /api/financials/{ticker}/prices
+  artifacts:
+    - data/artifacts/{ticker}/thesis/thesis.json  # check if already covered
+
+outputs:
+  - data/artifacts/_ideas/screen_results.json
+  - data/artifacts/_ideas/screen_results.md
