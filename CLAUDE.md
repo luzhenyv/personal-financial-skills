@@ -52,6 +52,9 @@ The REST API (`$PFS_API_URL`, default `http://localhost:8000`) provides read-onl
 | `GET /api/analysis/risk/{TICKER}` | Per-ticker risk contribution (beta, volatility, correlation) |
 | `GET /api/analysis/signals/{TICKER}` | Per-ticker aggregated quant signals (momentum, vol, fundamentals) |
 | `GET /api/analysis/signals/portfolio/summary` | Portfolio-wide signal aggregation for all positions |
+| `GET /api/analysis/screen` | Parameterized stock screening (type, growth, value, quality filters) |
+| `GET /api/analysis/correlation-matrix?tickers=X,Y,Z` | Pairwise correlation matrix from price data |
+| `POST /api/analysis/knowledge/ingest` | Knowledge base ingestion (placeholder) |
 
 ## Data Source Fallback Chain
 

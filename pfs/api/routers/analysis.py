@@ -214,3 +214,161 @@ def get_ticker_signals(
     from pfs.services.signals import aggregate_ticker_signals
 
     return aggregate_ticker_signals(db, ticker.upper(), lookback_days=lookback_days)
+
+
+# ── Stock Screening ──────────────────────────────────────────
+
+
+@router.get("/screen")
+def screen_stocks(
+    type: str | None = Query(None, description="Preset: growth, value, quality"),
+    min_revenue_growth: float | None = Query(None),
+    max_revenue_growth: float | None = Query(None),
+    min_eps_growth: float | None = Query(None),
+    max_pe: float | None = Query(None),
+    min_pe: float | None = Query(None),
+    max_ps: float | None = Query(None),
+    max_ev_ebitda: float | None = Query(None),
+    min_fcf_yield: float | None = Query(None),
+    min_roe: float | None = Query(None),
+    min_roic: float | None = Query(None),
+    min_gross_margin: float | None = Query(None),
+    min_operating_margin: float | None = Query(None),
+    min_net_margin: float | None = Query(None),
+    max_debt_to_equity: float | None = Query(None),
+    min_current_ratio: float | None = Query(None),
+    min_revenue: int | None = Query(None, description="Minimum annual revenue in dollars"),
+    min_market_cap: int | None = Query(None),
+    sector: str | None = Query(None),
+    sort_by: str = Query("revenue_growth"),
+    sort_desc: bool = Query(True),
+    limit: int = Query(25, ge=1, le=100),
+    db: Session = Depends(get_db),
+):
+    """Parameterized stock screening across all ingested companies.
+
+    Use ``type`` for presets (growth, value, quality) or pass individual
+    filter parameters.  Used by the idea-generation skill.
+    """
+    from pfs.services.screen import screen_companies
+
+    return screen_companies(
+        db,
+        screen_type=type,
+        min_revenue_growth=min_revenue_growth,
+        max_revenue_growth=max_revenue_growth,
+        min_eps_growth=min_eps_growth,
+        max_pe=max_pe,
+        min_pe=min_pe,
+        max_ps=max_ps,
+        max_ev_ebitda=max_ev_ebitda,
+        min_fcf_yield=min_fcf_yield,
+        min_roe=min_roe,
+        min_roic=min_roic,
+        min_gross_margin=min_gross_margin,
+        min_operating_margin=min_operating_margin,
+        min_net_margin=min_net_margin,
+        max_debt_to_equity=max_debt_to_equity,
+        min_current_ratio=min_current_ratio,
+        min_revenue=min_revenue,
+        min_market_cap=min_market_cap,
+        sector=sector,
+        sort_by=sort_by,
+        sort_desc=sort_desc,
+        limit=limit,
+    )
+
+
+# ── Correlation Matrix ───────────────────────────────────────
+
+
+@router.get("/correlation-matrix")
+def get_correlation_matrix(
+    tickers: str = Query(..., description="Comma-separated tickers, e.g. NVDA,AAPL,MSFT"),
+    lookback_days: int = Query(252, ge=30, le=756),
+    db: Session = Depends(get_db),
+):
+    """Pairwise correlation matrix from daily price returns.
+
+    Used by risk-manager and fund-manager skills for portfolio
+    diversification analysis.
+    """
+    from datetime import date, timedelta
+
+    import numpy as np
+
+    from pfs.services.risk import _price_series, _returns_from_prices
+
+    ticker_list = [t.strip().upper() for t in tickers.split(",") if t.strip()]
+    if len(ticker_list) < 2:
+        raise HTTPException(status_code=400, detail="Need at least 2 tickers")
+
+    end = date.today()
+    start = end - timedelta(days=lookback_days + 60)
+
+    # Collect return series per ticker
+    returns_map: dict[str, np.ndarray] = {}
+    missing: list[str] = []
+    for t in ticker_list:
+        prices = _price_series(db, t, start, end)
+        if len(prices) < 30:
+            missing.append(t)
+            continue
+        returns_map[t] = _returns_from_prices(prices)
+
+    if missing:
+        raise HTTPException(
+            status_code=404,
+            detail=f"Insufficient price data for: {', '.join(missing)}",
+        )
+
+    # Align all series to the shortest length
+    valid_tickers = list(returns_map.keys())
+    min_len = min(len(r) for r in returns_map.values())
+    aligned = np.array([returns_map[t][-min_len:] for t in valid_tickers])
+
+    # Compute correlation matrix
+    corr = np.corrcoef(aligned)
+
+    # Build structured response
+    matrix: dict[str, dict[str, float]] = {}
+    for i, t1 in enumerate(valid_tickers):
+        matrix[t1] = {}
+        for j, t2 in enumerate(valid_tickers):
+            matrix[t1][t2] = round(float(corr[i, j]), 4)
+
+    return {
+        "tickers": valid_tickers,
+        "lookback_days": lookback_days,
+        "trading_days_used": min_len,
+        "matrix": matrix,
+    }
+
+
+# ── Knowledge Base (Placeholder) ─────────────────────────────
+
+
+class KnowledgeIngestRequest(BaseModel):
+    title: str
+    content: str
+    source_type: str = "text"
+    sectors: list[str] = []
+    tickers_mentioned: list[str] = []
+    tags: list[str] = []
+
+
+@router.post("/knowledge/ingest")
+def ingest_knowledge(body: KnowledgeIngestRequest):
+    """Placeholder — document ingestion into the knowledge base.
+
+    Full implementation planned. Currently returns a stub response.
+    """
+    return {
+        "status": "placeholder",
+        "message": "Knowledge ingestion endpoint not yet implemented. Use the knowledge-base skill scripts directly.",
+        "received": {
+            "title": body.title,
+            "source_type": body.source_type,
+            "content_length": len(body.content),
+        },
+    }

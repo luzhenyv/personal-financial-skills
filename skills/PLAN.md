@@ -758,25 +758,25 @@ The FastAPI server is the **computation and data hub**. Skills are thin clients 
 
 **Phase 3 — Earnings & Risk**
 
-| Endpoint | Needed by | Purpose |
-|----------|-----------|---------|
-| **`GET /api/financials/{ticker}/quarterly?quarters=8`** | earnings-analysis | Quarterly breakdown for QoQ comparison |
-| **`GET /api/analysis/risk/{ticker}`** | risk-manager | Per-ticker beta, volatility, correlation vs benchmark |
-| **`POST /api/analysis/risk/portfolio`** | risk-manager | Portfolio-level beta, VaR, max drawdown, sector concentration |
-| **`GET /api/analysis/correlation-matrix?tickers=X,Y,Z`** | risk-manager, fund-manager | Pairwise correlation matrix from price data |
+| Endpoint | Needed by | Purpose | Status |
+|----------|-----------|---------|--------|
+| **`GET /api/financials/{ticker}/quarterly?quarters=8`** | earnings-analysis | Quarterly breakdown for QoQ comparison | ✅ Done |
+| **`GET /api/analysis/risk/{ticker}`** | risk-manager | Per-ticker beta, volatility, correlation vs benchmark | ✅ Done |
+| **`POST /api/analysis/risk/portfolio`** | risk-manager | Portfolio-level beta, VaR, max drawdown, sector concentration | ✅ Done |
+| **`GET /api/analysis/correlation-matrix?tickers=X,Y,Z`** | risk-manager, fund-manager | Pairwise correlation matrix from price data | ✅ Done |
 
 **Phase 4 — Intelligence**
 
-| Endpoint | Needed by | Purpose |
-|----------|-----------|---------|
-| **`GET /api/analysis/screen`** | idea-generation | Parameterized stock screening across all companies |
-| **`GET /api/catalysts/upcoming?days=30`** | catalyst-calendar, morning-briefing | Aggregated catalyst events |
+| Endpoint | Needed by | Purpose | Status |
+|----------|-----------|---------|--------|
+| **`GET /api/analysis/screen`** | idea-generation | Parameterized stock screening across all companies | ✅ Done |
+| **`GET /api/catalysts/upcoming?days=30`** | catalyst-calendar, morning-briefing | Aggregated catalyst events | ❌ Not built |
 
 **Phase 5 — Knowledge**
 
-| Endpoint | Needed by | Purpose |
-|----------|-----------|---------|
-| **`POST /api/knowledge/ingest`** | knowledge-base | Document ingestion and structured extraction |
+| Endpoint | Needed by | Purpose | Status |
+|----------|-----------|---------|--------|
+| **`POST /api/analysis/knowledge/ingest`** | knowledge-base | Document ingestion and structured extraction | 🏗️ Placeholder |
 
 ### Design Principles for New Endpoints
 

@@ -34,6 +34,9 @@ Read-only access to the database (`$PFS_API_URL`, default `http://localhost:8000
 - `GET /api/analysis/risk/{TICKER}` — per-ticker risk contribution
 - `GET /api/analysis/signals/{TICKER}` — per-ticker aggregated quant signals
 - `GET /api/analysis/signals/portfolio/summary` — portfolio-wide signal aggregation
+- `GET /api/analysis/screen` — parameterized stock screening (type, growth, value, quality filters)
+- `GET /api/analysis/correlation-matrix?tickers=X,Y,Z` — pairwise correlation matrix
+- `POST /api/analysis/knowledge/ingest` — knowledge base ingestion (placeholder)
 
 ## Data Source Priority
 
