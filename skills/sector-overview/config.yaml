@@ -1,0 +1,26 @@
+name: sector-overview
+description: >
+  Industry landscape reports for sectors represented in the coverage universe.
+  Competitive positioning, valuation context, key trends, and thematic analysis.
+
+triggers:
+  - "sector overview"
+  - "industry report"
+  - "market landscape"
+  - "sector analysis"
+  - "industry deep dive"
+
+inputs:
+  - GET /api/companies/
+  - GET /api/financials/{ticker}/metrics
+  - GET /api/financials/{ticker}/income-statements?years=3
+
+outputs:
+  - data/artifacts/_sectors/{sector_slug}/sector_data.json
+  - data/artifacts/_sectors/{sector_slug}/sector_overview.md
+
+scripts:
+  collect: scripts/collect_sector.py
+  report: scripts/generate_sector_report.py
+
+schedule: null  # on-demand, not scheduled
