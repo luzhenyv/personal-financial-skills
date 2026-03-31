@@ -42,6 +42,7 @@ Skills stay thin: fetch data from API → let AI analyze → write artifacts.
 | 1 | **company-profile** | `skills/company-profile/` | ✅ Production | Adapted from equity-research `initiating-coverage` |
 | 2 | **thesis-tracker** | `skills/thesis-tracker/` | ✅ Production | Adapted from equity-research `thesis-tracker` |
 | 3 | **etl-coverage** | `skills/etl-coverage/` | ✅ Production | Original |
+| 4 | **knowledge-base** | `skills/knowledge-base/` | 🏗️ Placeholder | Original — full redesign planned |
 
 ---
 
@@ -145,7 +146,7 @@ skills/
   idea-generation/               # 🆕 Phase 4 — Stock screening pipeline
   sector-overview/               # 🆕 Phase 4 — Industry landscape reports
   catalyst-calendar/             # 🆕 Phase 4 — Cross-portfolio event tracking
-  knowledge-base/                # 🆕 Phase 5 — External research ingestion
+  knowledge-base/                # �️ Placeholder — External research ingestion (full redesign planned)
   fund-manager/                  # 🆕 Phase 4 — Multi-agent decision synthesis
 ```
 

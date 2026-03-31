@@ -56,6 +56,7 @@ Read `SKILL.md` inside each skill directory before executing:
 | `skills/morning-briefing/` | `data/artifacts/_daily/briefings/` |
 | `skills/model-update/` | `data/artifacts/{ticker}/model/` |
 | `skills/fund-manager/` | `data/artifacts/_portfolio/decisions/` |
+| `skills/knowledge-base/` | `data/artifacts/_knowledge/` |
 
 ## Artifact Convention
 
@@ -119,6 +120,10 @@ uv run python skills/fund-manager/scripts/fund_cli.py decide [--persist] # Phase
 uv run python skills/fund-manager/scripts/fund_cli.py review             # Phase 4: interactive
 uv run python skills/fund-manager/scripts/fund_cli.py show               # View latest
 uv run python skills/fund-manager/scripts/fund_cli.py history            # Past decisions
+
+# Knowledge base workflow (placeholder)
+uv run python skills/knowledge-base/scripts/ingest.py --file {path}   # Ingest local file
+uv run python skills/knowledge-base/scripts/search.py --query {text}  # Search knowledge
 
 # Section extraction
 uv run python -m pfs.etl.section_extractor {TICKER}
