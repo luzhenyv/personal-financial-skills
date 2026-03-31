@@ -50,6 +50,9 @@ Read `SKILL.md` inside each skill directory before executing:
 | `skills/thesis-tracker/` | `data/artifacts/{ticker}/thesis/` + DB |
 | `skills/earnings-analysis/` | `data/artifacts/{ticker}/earnings/` |
 | `skills/risk-manager/` | `data/artifacts/_portfolio/risk/` |
+| `skills/earnings-preview/` | `data/artifacts/{ticker}/earnings/` |
+| `skills/morning-briefing/` | `data/artifacts/_daily/briefings/` |
+| `skills/model-update/` | `data/artifacts/{ticker}/model/` |
 
 ## Artifact Convention
 
@@ -92,6 +95,18 @@ uv run python skills/risk-manager/scripts/risk_cli.py check             # Full r
 uv run python skills/risk-manager/scripts/risk_cli.py alerts            # Current active alerts
 uv run python skills/risk-manager/scripts/risk_cli.py rules             # Show/edit risk rules
 uv run python skills/risk-manager/scripts/risk_cli.py report            # Generate markdown report
+
+# Earnings preview workflow
+uv run python skills/earnings-preview/scripts/collect_preview.py {TICKER}
+uv run python skills/earnings-preview/scripts/generate_preview.py {TICKER} [--persist]
+
+# Morning briefing workflow
+uv run python skills/morning-briefing/scripts/collect_briefing.py
+uv run python skills/morning-briefing/scripts/generate_briefing.py [--persist]
+
+# Model update workflow
+uv run python skills/model-update/scripts/collect_model_data.py {TICKER}
+uv run python skills/model-update/scripts/update_projections.py {TICKER} [--persist]
 
 # Section extraction
 uv run python -m pfs.etl.section_extractor {TICKER}

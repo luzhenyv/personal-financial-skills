@@ -74,6 +74,9 @@ Skills live in `skills/`. Each skill has a `SKILL.md` with detailed instructions
 | `thesis-tracker` | User thesis + REST API data | `data/artifacts/{ticker}/thesis/` + DB |
 | `earnings-analysis` | REST API quarterly data + thesis | `data/artifacts/{ticker}/earnings/` |
 | `risk-manager` | Portfolio API + thesis artifacts | `data/artifacts/_portfolio/risk/` |
+| `earnings-preview` | REST API quarterly + thesis | `data/artifacts/{ticker}/earnings/` |
+| `morning-briefing` | Portfolio + prices + thesis + risk | `data/artifacts/_daily/briefings/` |
+| `model-update` | REST API financials + projections | `data/artifacts/{ticker}/model/` |
 
 ## Artifact Output Convention
 
@@ -133,6 +136,18 @@ uv run python skills/risk-manager/scripts/risk_cli.py check             # Full r
 uv run python skills/risk-manager/scripts/risk_cli.py alerts            # Current active alerts
 uv run python skills/risk-manager/scripts/risk_cli.py rules             # Show/edit risk rules
 uv run python skills/risk-manager/scripts/risk_cli.py report            # Generate markdown report
+
+# Earnings preview workflow
+uv run python skills/earnings-preview/scripts/collect_preview.py {TICKER}
+uv run python skills/earnings-preview/scripts/generate_preview.py {TICKER} [--persist]
+
+# Morning briefing workflow
+uv run python skills/morning-briefing/scripts/collect_briefing.py
+uv run python skills/morning-briefing/scripts/generate_briefing.py [--persist]
+
+# Model update workflow
+uv run python skills/model-update/scripts/collect_model_data.py {TICKER}
+uv run python skills/model-update/scripts/update_projections.py {TICKER} [--persist]
 
 # Section extraction (run after ETL)
 uv run python -m pfs.etl.section_extractor {TICKER}
