@@ -1,0 +1,21 @@
+name: catalyst-calendar
+description: Unified cross-portfolio event calendar — aggregates catalysts plus macro events
+triggers:
+  - schedule: "0 6 * * 1-5"  # Weekdays at 6 AM before market open
+  - manual: "catalyst calendar"
+  - manual: "upcoming events"
+  - manual: "what's coming up"
+
+inputs:
+  api:
+    - GET /api/companies/
+    - GET /api/filings/{ticker}/
+    - GET /api/portfolio/positions
+  artifacts:
+    - data/artifacts/{ticker}/thesis/catalysts.json
+    - data/artifacts/_portfolio/catalysts/macro_events.json
+
+outputs:
+  - data/artifacts/_portfolio/catalysts/calendar.json
+  - data/artifacts/_portfolio/catalysts/calendar.md
+  - data/artifacts/_portfolio/catalysts/macro_events.json
