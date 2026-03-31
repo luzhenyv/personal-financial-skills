@@ -178,3 +178,39 @@ def compute_ticker_risk(
     from pfs.services.risk import ticker_risk
 
     return ticker_risk(db, ticker.upper(), benchmark=benchmark, lookback_days=lookback_days)
+
+
+# ── Signal Aggregation (Fund Manager) ────────────────────────
+
+
+@router.get("/signals/portfolio/summary")
+def get_portfolio_signals(
+    portfolio_id: int = Query(1, ge=1),
+    lookback_days: int = Query(30, ge=7, le=365),
+    db: Session = Depends(get_db),
+):
+    """Aggregate signals for all positions in the portfolio."""
+    from pfs.services.signals import aggregate_portfolio_signals
+
+    try:
+        return aggregate_portfolio_signals(
+            db, portfolio_id, lookback_days=lookback_days,
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+
+
+@router.get("/signals/{ticker}")
+def get_ticker_signals(
+    ticker: str,
+    lookback_days: int = Query(30, ge=7, le=365),
+    db: Session = Depends(get_db),
+):
+    """Aggregate multi-source signals for a ticker — used by fund-manager skill.
+
+    Combines: price momentum, risk metrics, fundamental metrics into a
+    single signal bundle per ticker.
+    """
+    from pfs.services.signals import aggregate_ticker_signals
+
+    return aggregate_ticker_signals(db, ticker.upper(), lookback_days=lookback_days)

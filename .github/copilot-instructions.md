@@ -32,6 +32,8 @@ Read-only access to the database (`$PFS_API_URL`, default `http://localhost:8000
 - `POST /api/analysis/reports` — upsert report to DB
 - `POST /api/analysis/risk/portfolio` — portfolio-level risk metrics (beta, VaR, Sharpe, Sortino, drawdown)
 - `GET /api/analysis/risk/{TICKER}` — per-ticker risk contribution
+- `GET /api/analysis/signals/{TICKER}` — per-ticker aggregated quant signals
+- `GET /api/analysis/signals/portfolio/summary` — portfolio-wide signal aggregation
 
 ## Data Source Priority
 
@@ -53,6 +55,7 @@ Read `SKILL.md` inside each skill directory before executing:
 | `skills/earnings-preview/` | `data/artifacts/{ticker}/earnings/` |
 | `skills/morning-briefing/` | `data/artifacts/_daily/briefings/` |
 | `skills/model-update/` | `data/artifacts/{ticker}/model/` |
+| `skills/fund-manager/` | `data/artifacts/_portfolio/decisions/` |
 
 ## Artifact Convention
 
@@ -107,6 +110,15 @@ uv run python skills/morning-briefing/scripts/generate_briefing.py [--persist]
 # Model update workflow
 uv run python skills/model-update/scripts/collect_model_data.py {TICKER}
 uv run python skills/model-update/scripts/update_projections.py {TICKER} [--persist]
+
+# Fund manager workflow (TradingAgents-inspired)
+uv run python skills/fund-manager/scripts/fund_cli.py run                # Full pipeline
+uv run python skills/fund-manager/scripts/fund_cli.py collect            # Phase 1: signals
+uv run python skills/fund-manager/scripts/fund_cli.py debate             # Phase 2: bull/bear
+uv run python skills/fund-manager/scripts/fund_cli.py decide [--persist] # Phase 3: decisions
+uv run python skills/fund-manager/scripts/fund_cli.py review             # Phase 4: interactive
+uv run python skills/fund-manager/scripts/fund_cli.py show               # View latest
+uv run python skills/fund-manager/scripts/fund_cli.py history            # Past decisions
 
 # Section extraction
 uv run python -m pfs.etl.section_extractor {TICKER}

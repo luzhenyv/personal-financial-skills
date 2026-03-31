@@ -50,6 +50,8 @@ The REST API (`$PFS_API_URL`, default `http://localhost:8000`) provides read-onl
 | `POST /api/analysis/reports` | Upsert an analysis report into the DB |
 | `POST /api/analysis/risk/portfolio` | Portfolio-level risk metrics (beta, VaR, Sharpe, Sortino, drawdown) |
 | `GET /api/analysis/risk/{TICKER}` | Per-ticker risk contribution (beta, volatility, correlation) |
+| `GET /api/analysis/signals/{TICKER}` | Per-ticker aggregated quant signals (momentum, vol, fundamentals) |
+| `GET /api/analysis/signals/portfolio/summary` | Portfolio-wide signal aggregation for all positions |
 
 ## Data Source Fallback Chain
 
@@ -77,6 +79,7 @@ Skills live in `skills/`. Each skill has a `SKILL.md` with detailed instructions
 | `earnings-preview` | REST API quarterly + thesis | `data/artifacts/{ticker}/earnings/` |
 | `morning-briefing` | Portfolio + prices + thesis + risk | `data/artifacts/_daily/briefings/` |
 | `model-update` | REST API financials + projections | `data/artifacts/{ticker}/model/` |
+| `fund-manager` | All skill artifacts + REST API | `data/artifacts/_portfolio/decisions/` |
 
 ## Artifact Output Convention
 
@@ -148,6 +151,15 @@ uv run python skills/morning-briefing/scripts/generate_briefing.py [--persist]
 # Model update workflow
 uv run python skills/model-update/scripts/collect_model_data.py {TICKER}
 uv run python skills/model-update/scripts/update_projections.py {TICKER} [--persist]
+
+# Fund manager workflow (TradingAgents-inspired)
+uv run python skills/fund-manager/scripts/fund_cli.py run                # Full pipeline
+uv run python skills/fund-manager/scripts/fund_cli.py collect            # Phase 1: signals
+uv run python skills/fund-manager/scripts/fund_cli.py debate             # Phase 2: bull/bear
+uv run python skills/fund-manager/scripts/fund_cli.py decide [--persist] # Phase 3: decisions
+uv run python skills/fund-manager/scripts/fund_cli.py review             # Phase 4: interactive
+uv run python skills/fund-manager/scripts/fund_cli.py show               # View latest
+uv run python skills/fund-manager/scripts/fund_cli.py history            # Past decisions
 
 # Section extraction (run after ETL)
 uv run python -m pfs.etl.section_extractor {TICKER}
